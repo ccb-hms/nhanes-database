@@ -177,6 +177,7 @@ colnames(fileListTable) = c(cnames, "ScrubbedDataType")
 #--------------------------------------------------------------------------------------------------------
 
 # enable restart
+downloadedFiles = vector(mode = "character", length = nrow(fileListTable))
 i = 1
 for (i in i:length(dataTypes)) {
 
@@ -208,8 +209,18 @@ for (i in i:length(dataTypes)) {
             result = "error"
             while (result == "error" || result == "warning") {
 
+                urlSplit = strsplit(x = currFileUrl, split = "/", fixed = TRUE)[[1]]
+                fileName  = urlSplit[length(urlSplit)]
+
                 result = tryCatch({
-                    haven::read_xpt(currFileUrl)
+                    currTemp = tempfile()
+                    utils::download.file(
+                        url = currFileUrl, 
+                        destfile = currTemp
+                    )
+                    z = haven::read_xpt(currTemp)
+                    file.remove(currTemp)
+                    z
                 }, warning = function(w) {
                     print(w)
                     Sys.sleep(2)
@@ -222,12 +233,16 @@ for (i in i:length(dataTypes)) {
             }
 
             dfList[[length(dfList) + 1]] = result
+            rm(result)
+            gc()
 
             cat("done reading ", currFileUrl, "\n")
         }
     }
 
     m = dplyr::bind_rows(dfList)
+    rm(dfList)
+    gc()
 
     if (nrow(m) > 0) {
         write.table(
@@ -237,4 +252,7 @@ for (i in i:length(dataTypes)) {
             na = ""
         )
     }
+
+    rm(m)
+    gc()
 }
