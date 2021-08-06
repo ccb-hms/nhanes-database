@@ -177,7 +177,6 @@ colnames(fileListTable) = c(cnames, "ScrubbedDataType")
 #--------------------------------------------------------------------------------------------------------
 
 # enable restart
-downloadedFiles = vector(mode = "character", length = nrow(fileListTable))
 i = 1
 for (i in i:length(dataTypes)) {
 
@@ -237,6 +236,18 @@ for (i in i:length(dataTypes)) {
             gc()
 
             cat("done reading ", currFileUrl, "\n")
+        }
+    }
+
+    # fix inconsistent types in PSA age variable
+    # there are actually two versions of the age variable, 'KID221' and KIQ221
+    # not clear whether one or the other is supposed to be double / char from
+    # the NHANES documentation
+    if (currDataType == "ProstateSpecificAntigenPSA") {
+        for (j in 1:length(dfList)) {
+            if ("KID221" %in% colnames(dfList[[j]])) {
+                dfList[[j]][,"KID221"] = as.character(dfList[[j]][,"KID221"])
+            }
         }
     }
 
