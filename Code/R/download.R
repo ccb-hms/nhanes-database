@@ -10,6 +10,9 @@
 #     --privileged \
 #     nhanesdownload
 
+# run SQL Server container next to it
+# docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=yourStrong(!)Password' -p 1433:1433 -d mcr.microsoft.com/mssql/server:2019-CU12-ubuntu-20.04
+
 # sudo mount -t cifs -o user=npp10_adm,domain=MED.HARVARD.EDU,cruid=test,gid=test,uid=test,sec=ntlmssp //dbmihdswvfsp01.med.harvard.edu/secure-data$ /mnt/DataLake
 
 dir.create("/home/test/NhanesDownload")
@@ -263,6 +266,18 @@ for (i in i:length(dataTypes)) {
             na = ""
         )
     }
+
+    # TODO: generate SQL table definitions from column types in tibbles
+    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), currDataType, m)
+
+    # change TEXT to VARCHAR(128)
+    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(128)", fixed = TRUE)
+
+    # change DOUBLE to DECIMAL(20, 8)
+    createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" DECIMAL(20, 8)", fixed = TRUE)
+
+    # save all in one file?  separate files for each table?  include bulk insert statement?
+    # include DROP statement
 
     rm(m)
     gc()
