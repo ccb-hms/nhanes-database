@@ -319,11 +319,11 @@ for (i in i:length(dataTypes)) {
         # change TEXT to VARCHAR(128)
         createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(128)", fixed = TRUE)
 
-        # change DOUBLE to DECIMAL(20, 8)
-        createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" DECIMAL(20, 8)", fixed = TRUE)
+        # change DOUBLE to float
+        createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
 
         # we know that SEQN should always be an INT
-        createTableQuery = gsub(createTableQuery, pattern = "\"SEQN\" DECIMAL(20, 8)", replace = "\"SEQN\" INT", fixed = TRUE)
+        createTableQuery = gsub(createTableQuery, pattern = "\"SEQN\" float", replace = "\"SEQN\" INT", fixed = TRUE)
 
         # create the table in SQL
         SqlTools::dbSendUpdate(cn, createTableQuery)
