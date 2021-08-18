@@ -211,6 +211,8 @@ cn = MsSqlTools::connectMsSqlSqlLogin(
 SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")
 SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
 
+
+
 # enable restart
 i = 1
 for (i in i:length(dataTypes)) {
