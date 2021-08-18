@@ -1,19 +1,20 @@
 # pull down the NHANES data
 
-# run in container:
-# docker run --rm --name workbench -d \
-#     -v /Users/nathanpalmer/Projects/Databases/NHANES:/HostData \
-#     -p 8787:8787 \
-#     -p 2200:22 \
-#     -e CONTAINER_USER_USERNAME=test \
-#     -e CONTAINER_USER_PASSWORD=test \
-#     --privileged \
-#     nhanesdownload
-
-# run SQL Server container next to it
-# docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=yourStrong(!)Password' -p 1433:1433 -d mcr.microsoft.com/mssql/server:2019-CU12-ubuntu-20.04
-
-# sudo mount -t cifs -o user=npp10_adm,domain=MED.HARVARD.EDU,cruid=test,gid=test,uid=test,sec=ntlmssp //dbmihdswvfsp01.med.harvard.edu/secure-data$ /mnt/DataLake
+# run in container (must build nhanes-workbench first from this project's Dockerfile):
+# docker \
+#     run \
+#         --rm \
+#         --name nhanes-workbench \
+#         -d \
+#         -v /tmp:/HostData \
+#         -p 8787:8787 \
+#         -p 2200:22 \
+#         -p 1433:1433 \
+#         -e 'CONTAINER_USER_USERNAME=test' \
+#         -e 'CONTAINER_USER_PASSWORD=test' \
+#         -e 'ACCEPT_EULA=Y' \
+#         -e 'SA_PASSWORD=yourStrong(!)Password' \
+#         nhanes-workbench
 
 dir.create("/home/test/NhanesDownload")
 outputDirectory = "/home/test/NhanesDownload"
@@ -55,9 +56,6 @@ fileListTable[, "Data File"] =
         "https://wwwn.cdc.gov",
         urlListTable[, "Data File"]
     )
-
-# TODO: step through and make sure this is doing the right thing.
-#   -verify "&" files get correctly grouped
 
 # clean up data type names
 fileListTable[,"Data File Name"] = 
