@@ -1,7 +1,6 @@
 # docker build --progress plain --tag nhanes-workbench .
 
-# FIXME: update to 1.3.0 when build is done 
-FROM hmsccb/analytic-workbench:version-1.2.1
+FROM hmsccb/analytic-workbench:version-1.3.0
 
 # need old version of rvest in order for the hack that parses URLs to work
 RUN Rscript -e "remove.packages('rvest')"
