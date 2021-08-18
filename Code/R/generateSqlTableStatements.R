@@ -1,1 +1,0 @@
-write.table(paste(sep="", "CREATE TABLE [", dataTypes, "] (id int);"), file = "/HostData/Debug/CreateStatements.sql", col.names = FALSE, row.names = FALSE, quote=FALSE)
