@@ -16,6 +16,15 @@
 #         -e 'SA_PASSWORD=yourStrong(!)Password' \
 #         nhanes-workbench
 
+# parameters to connect to SQL
+sqlHost = "localhost"
+sqlUserName = "sa"
+sqlPassword = "yourStrong(!)Password"
+sqlDefaultDb = "master"
+
+# control persistence of downloaded and extracted text files
+persistTextFiles = FALSE
+
 dir.create("/home/test/NhanesDownload")
 outputDirectory = "/home/test/NhanesDownload"
 
@@ -163,8 +172,29 @@ cnames = colnames(fileListTable)
 fileListTable = cbind(fileListTable,  dataTypes[toupper(fileListTable[,"Data File Name"])])
 colnames(fileListTable) = c(cnames, "ScrubbedDataType")
 
-# can execute the code in generateSqlTableStatements.R at this point to make sure
-# that all dataTypes are legit MS SQL table names
+# connect to SQL
+cn = MsSqlTools::connectMsSqlSqlLogin(
+    server = sqlHost, 
+    user = sqlUserName, 
+    password = sqlPassword, 
+    database = sqlDefaultDb
+)
+
+# # create new DB
+# SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesTest")
+# SqlTools::dbSendUpdate(cn, "USE NhanesTest")
+
+# # generate dummy code to check validity of table names
+# stmts = paste(sep="", "CREATE TABLE [", dataTypes, "] (id int);")
+
+# # attempt to create all of the dummy tables
+# for (currStmt in stmts) {
+#     SqlTools::dbSendUpdate(cn, currStmt)
+# }
+
+# # if that worked, drop the DB
+# SqlTools::dbSendUpdate(cn, "USE master")
+# SqlTools::dbSendUpdate(cn, "DROP DATABASE NhanesTest")
 
 #--------------------------------------------------------------------------------------------------------
 # performance notes for large XPTs:
@@ -176,6 +206,10 @@ colnames(fileListTable) = c(cnames, "ScrubbedDataType")
 # 20 G after rm XPTs and gc()
 # 12G file 
 #--------------------------------------------------------------------------------------------------------
+
+# create landing zone for the raw data
+SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")
+SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
 
 # enable restart
 i = 1
@@ -190,10 +224,13 @@ for (i in i:length(dataTypes)) {
     # assemble a list containing all of the subtables for this data type
     dfList = list()
 
+    # pull all of the SAS files for this data type
     for (currRow in rowsForCurrDataType) {
 
+        # get the URL for the SAS file pointed to by the current row
         currFileUrl = fileListTable[currRow, "Data File"]
         
+        # there are a few that will require one-off handling
         if (
             currFileUrl != "https://wwwn.cdc.govNA"
             && currFileUrl != "https://wwwn.cdc.gov/Nchs/Nhanes/Dxa/Dxa.aspx"
@@ -252,31 +289,64 @@ for (i in i:length(dataTypes)) {
         }
     }
 
+    # combine the rows from all of the SAS files for this data type
     m = dplyr::bind_rows(dfList)
     rm(dfList)
     gc()
 
+    # if we were able to read a table for this data type
     if (nrow(m) > 0) {
+
+        # get a file system location to save the table
+        currOutputFileName = paste(sep = "/", outputDirectory, currDataType)
+
+        # write the table to file
         write.table(
             m,
-            file = paste(sep = "/", outputDirectory, currDataType),
+            file = currOutputFileName,
             sep = "\t",
-            na = ""
+            na = "",
+            row.names = FALSE,
+            col.names = FALSE
         )
+
+        # generate SQL table definitions from column types in tibbles
+        createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), currDataType, m)
+
+        # change TEXT to VARCHAR(128)
+        createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(128)", fixed = TRUE)
+
+        # change DOUBLE to DECIMAL(20, 8)
+        createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" DECIMAL(20, 8)", fixed = TRUE)
+
+        # we know that SEQN should always be an INT
+        createTableQuery = gsub(createTableQuery, pattern = "\"SEQN\" DECIMAL(20, 8)", replace = "\"SEQN\" INT", fixed = TRUE)
+
+        # create the table in SQL
+        SqlTools::dbSendUpdate(cn, createTableQuery)
+
+        # run bulk insert
+        insertStatement = paste(sep="",
+            "BULK INSERT ",
+            currDataType,
+            " FROM '",
+            currOutputFileName,
+            "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+        )
+
+        SqlTools::dbSendUpdate(cn, insertStatement)
+
+        # TODO: should parameterize the bulk insert to allow remote SQL Server instance, like this:
+        # https://www.easysoft.com/support/kb/kb01017.html
+        # would need to allow SMB shares out of the container...
+
+        # if we don't want to keep the derived text files, then delete to save disk space
+        if (!persistTextFiles) {
+            file.remove(currOutputFileName)
+        }
     }
 
-    # TODO: generate SQL table definitions from column types in tibbles
-    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), currDataType, m)
-
-    # change TEXT to VARCHAR(128)
-    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(128)", fixed = TRUE)
-
-    # change DOUBLE to DECIMAL(20, 8)
-    createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" DECIMAL(20, 8)", fixed = TRUE)
-
-    # save all in one file?  separate files for each table?  include bulk insert statement?
-    # include DROP statement
-
+    # keep memory as clean as possible
     rm(m)
     gc()
 }
