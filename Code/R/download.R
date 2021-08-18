@@ -211,7 +211,8 @@ cn = MsSqlTools::connectMsSqlSqlLogin(
 SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")
 SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
 
-
+# prevent scientific notation
+options(scipen = 15)
 
 # enable restart
 i = 1
