@@ -303,6 +303,23 @@ for (i in i:length(dataTypes)) {
         # get a file system location to save the table
         currOutputFileName = paste(sep = "/", outputDirectory, currDataType)
 
+        # get data types for each column in our current table
+        columnTypes = sapply(m, class)
+
+        # identify columns that contain character data
+        ixCharacterColumns = which(columnTypes == "character")
+
+        # if we have any character columns
+        if (length(ixCharacterColumns) > 0) {
+
+            # iterate over the character columns
+            for (currCharColumn in ixCharacterColumns) {
+
+                # fix any embedded line endings
+                m[,currCharColumn] = gsub(pattern = "[\r\n]", replacement = "", x = m[,currCharColumn][[1]])
+            }
+        }
+
         # write the table to file
         write.table(
             m,
@@ -316,8 +333,8 @@ for (i in i:length(dataTypes)) {
         # generate SQL table definitions from column types in tibbles
         createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), currDataType, m)
 
-        # change TEXT to VARCHAR(128)
-        createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(128)", fixed = TRUE)
+        # change TEXT to VARCHAR(256)
+        createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
 
         # change DOUBLE to float
         createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
