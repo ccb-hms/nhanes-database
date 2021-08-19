@@ -207,8 +207,9 @@ cn = MsSqlTools::connectMsSqlSqlLogin(
 # 12G file 
 #--------------------------------------------------------------------------------------------------------
 
-# create landing zone for the raw data
+# create landing zone for the raw data, set recovery mode to simple
 SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")
+SqlTools::dbSendUpdate(cn, "ALTER DATABASE [NhanesLandingZone] SET RECOVERY SIMPLE")
 SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
 
 # prevent scientific notation
@@ -287,7 +288,7 @@ for (i in i:length(dataTypes)) {
     if (currDataType == "ProstateSpecificAntigenPSA") {
         for (j in 1:length(dfList)) {
             if ("KID221" %in% colnames(dfList[[j]])) {
-                dfList[[j]][,"KID221"] = as.character(dfList[[j]][,"KID221"])
+                dfList[[j]][,"KID221"] = as.character(dfList[[j]][,"KID221"][[1]])
             }
         }
     }
@@ -327,7 +328,8 @@ for (i in i:length(dataTypes)) {
             sep = "\t",
             na = "",
             row.names = FALSE,
-            col.names = FALSE
+            col.names = FALSE,
+            quote = FALSE
         )
 
         # generate SQL table definitions from column types in tibbles
@@ -370,3 +372,9 @@ for (i in i:length(dataTypes)) {
     rm(m)
     gc()
 }
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
