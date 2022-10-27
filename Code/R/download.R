@@ -16,6 +16,20 @@
 #         -e 'SA_PASSWORD=yourStrong(!)Password' \
 #         nhanes-workbench
 
+optionList = list(
+  optparse::make_option(c("--container-build"), type="logical", default=FALSE, 
+              help="is this script running inside of a container build process", metavar="logical")
+); 
+ 
+optParser = optparse::OptionParser(option_list=optionList);
+opt = optparse::parse_args(optParser);
+
+# this varaible is used below to determine how to handle errors.
+# if running in a container build process, any errors encountered
+# in the processing of the files should cause R to return non-zero
+# status to the OS, causing the container build to fail.
+runningInContainerBuild = opt[["container-build"]]
+
 # parameters to connect to SQL
 sqlHost = "localhost"
 sqlUserName = "sa"
@@ -25,8 +39,7 @@ sqlDefaultDb = "master"
 # control persistence of downloaded and extracted text files
 persistTextFiles = FALSE
 
-dir.create("/home/test/NhanesDownload")
-outputDirectory = "/home/test/NhanesDownload"
+outputDirectory = "/NHANES/Data"
 
 # try using the comprehesive listing
 comprehensiveHtmlDataList = "https://wwwn.cdc.gov/nchs/nhanes/search/datapage.aspx"
@@ -215,12 +228,23 @@ SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
 # prevent scientific notation
 options(scipen = 15)
 
+# data types that should be skipped for one reason or another
+skipDataTypes = c(
+    "PhysicalActivityMonitorMinute",         # large files take a long time to download, not likely used in most cases
+    "PhysicalActivityMonitorRawData80hz",    # only available by FTP
+    "VitaminD"                               # Vitamin D data is broken and redirects to HTML instead of SAS data file
+)
+
 # enable restart
 i = 1
 for (i in i:length(dataTypes)) {
 
     # get the name of the data type
     currDataType = dataTypes[i]
+
+    if (currDataType %in% skipDataTypes) {
+        next
+    }
 
     # find all rows with URLs that should be relevant to the current data type
     rowsForCurrDataType = which(fileListTable[,"ScrubbedDataType"] == currDataType)
@@ -233,6 +257,7 @@ for (i in i:length(dataTypes)) {
 
         # get the URL for the SAS file pointed to by the current row
         currFileUrl = fileListTable[currRow, "Data File"]
+        currYears = fileListTable[currRow, "Years"]
         
         # there are a few that will require one-off handling
         if (
@@ -269,8 +294,18 @@ for (i in i:length(dataTypes)) {
                 }, error = function(e) {
                     print(e)
                     Sys.sleep(2)
-                    return("error")
+                    if (runningInContainerBuild) {
+                        quit(status=99, save="no")
+                    } else {
+                        return("error")
+                    }
                 })
+            }
+
+            # save the survey years in the demographics table
+            if (currDataType == "DemographicVariablesAndSampleWeights") {
+                years = rep(x=currYears, times=nrow(result))
+                result = cbind(result, years)
             }
 
             dfList[[length(dfList) + 1]] = result
@@ -378,3 +413,6 @@ SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
 # shrink transaction log
 SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
