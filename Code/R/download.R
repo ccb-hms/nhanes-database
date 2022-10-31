@@ -278,6 +278,11 @@ for (i in i:length(dataTypes)) {
                 urlSplit = strsplit(x = currFileUrl, split = "/", fixed = TRUE)[[1]]
                 fileName  = urlSplit[length(urlSplit)]
 
+                # skip the "pandemic" 2017 -- 2020 summary files
+                if (length(grep(pattern = "^p_", ignore.case=TRUE, fixed = FALSE, x = fileName))) {
+                    next
+                }
+
                 result = tryCatch({
                     currTemp = tempfile()
                     utils::download.file(
