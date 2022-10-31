@@ -352,7 +352,7 @@ for (i in i:length(dataTypes)) {
             for (currCharColumn in ixCharacterColumns) {
 
                 # fix any embedded line endings
-                m[,currCharColumn] = gsub(pattern = "[\r\n]", replacement = "", x = m[,currCharColumn][[1]])
+                m[,currCharColumn] = gsub(pattern = "[\r\n]", replacement = "", x = m[,currCharColumn])
             }
         }
 
