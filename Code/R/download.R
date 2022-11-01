@@ -230,9 +230,10 @@ options(scipen = 15)
 
 # data types that should be skipped for one reason or another
 skipDataTypes = c(
-    "PhysicalActivityMonitorMinute",         # large files take a long time to download, not likely used in most cases
-    "PhysicalActivityMonitorRawData80hz",    # only available by FTP
-    "VitaminD"                               # Vitamin D data is broken and redirects to HTML instead of SAS data file
+    "PhysicalActivityMonitorMinute",            # large files take a long time to download, not likely used in most cases
+    "PhysicalActivityMonitorRawData80hz",       # only available by FTP
+    "VitaminD",                                 # Vitamin D data is broken and redirects to HTML instead of SAS data file
+    "OralMicrobiomeProject"                     # redirect to an ASP page
 )
 
 # enable restart
