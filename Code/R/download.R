@@ -257,9 +257,26 @@ for (i in i:length(dataTypes)) {
 
         # get the URL for the SAS file pointed to by the current row
         currFileUrl = fileListTable[currRow, "Data File"]
+
+        # get the date range for this table
         currYears = fileListTable[currRow, "Years"]
+
+        # split the URL on '/' to extract the file name
+        urlSplit = strsplit(x = currFileUrl, split = "/", fixed = TRUE)[[1]]
+        fileName  = urlSplit[length(urlSplit)]
+
+        # TODO: this caused infinte loop on P_* matches because "next" loops on the error wait loop 
+        # when it was in the nested loop; verify fix
+
+        # skip the "pandemic" 2017 -- 2020 summary files, all of which being with the prefix P_
+        if (length(grep(pattern = "^p_", ignore.case=TRUE, fixed = FALSE, x = fileName)) > 0 ) {
+            next
+        }
         
         # there are a few that will require one-off handling
+
+        # TODO: this exclusion criteria needs to be merged with the 
+        # skipDataTypes - based approach above
         if (
             currFileUrl != "https://wwwn.cdc.govNA"
             && currFileUrl != "https://wwwn.cdc.gov/Nchs/Nhanes/Dxa/Dxa.aspx"
@@ -274,14 +291,6 @@ for (i in i:length(dataTypes)) {
             # loop to catch errors in transfer and re-run after brief wait
             result = "error"
             while (result == "error" || result == "warning") {
-
-                urlSplit = strsplit(x = currFileUrl, split = "/", fixed = TRUE)[[1]]
-                fileName  = urlSplit[length(urlSplit)]
-
-                # skip the "pandemic" 2017 -- 2020 summary files, all of which being with the prefix P_
-                if (length(grep(pattern = "^p_", ignore.case=TRUE, fixed = FALSE, x = fileName)) > 0 ) {
-                    next
-                }
 
                 result = tryCatch({
                     currTemp = tempfile()
