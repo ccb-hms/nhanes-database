@@ -318,8 +318,8 @@ for (i in i:length(dataTypes)) {
 
             # save the survey years in the demographics table
             if (currDataType == "DemographicVariablesAndSampleWeights") {
-                years = rep(x=currYears, times=nrow(result))
-                result = cbind(result, years)
+                years = dplyr::tibble("years" = rep(x=currYears, times=nrow(result)))
+                result = dplyr::bind_cols(result, years)
             }
 
             dfList[[length(dfList) + 1]] = result
