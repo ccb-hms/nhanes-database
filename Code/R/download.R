@@ -455,6 +455,10 @@ createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "QuestionnaireVariables", qu
 # fix TEXT column types
 createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
 
+# create the table in SQL
+SqlTools::dbSendUpdate(cn, createTableQuery)
+
+# generate file name for temporary output
 currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
 
 # write questionnaireVariables table to disk
