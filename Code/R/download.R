@@ -236,6 +236,9 @@ skipDataTypes = c(
     "OralMicrobiomeProject"                     # redirect to an ASP page
 )
 
+# track which variables appear in each questionnaire
+questionnaireVariables = dplyr::tibble(Questionnaire=character(), Variable=character())
+
 # enable restart
 i = 1
 for (i in i:length(dataTypes)) {
@@ -265,9 +268,6 @@ for (i in i:length(dataTypes)) {
         # split the URL on '/' to extract the file name
         urlSplit = strsplit(x = currFileUrl, split = "/", fixed = TRUE)[[1]]
         fileName  = urlSplit[length(urlSplit)]
-
-        # TODO: this caused infinte loop on P_* matches because "next" loops on the error wait loop 
-        # when it was in the nested loop; verify fix
 
         # skip the "pandemic" 2017 -- 2020 summary files, all of which being with the prefix P_
         if (length(grep(pattern = "^p_", ignore.case=TRUE, fixed = FALSE, x = fileName)) > 0 ) {
@@ -322,6 +322,32 @@ for (i in i:length(dataTypes)) {
                 years = dplyr::tibble("years" = rep(x=currYears, times=nrow(result)))
                 result = dplyr::bind_cols(result, years)
             }
+
+            # append a column containing the URL from which the original data was pulled
+            result = dplyr::bind_cols(
+                result, 
+                dplyr::tibble("DownloadUrl" = rep(x=currFileUrl, times=nrow(result)))
+            )
+
+            # append a column containing the questionnaire abbreviation
+            result = dplyr::bind_cols(
+                result, 
+                dplyr::tibble("Questionnaire" = rep(x=gsub(pattern=".XPT", replace="", fixed=TRUE, fileName), times=nrow(result)))
+            )
+
+            # save mapping from questionnaire to variables
+            questionnaireVariables =
+                dplyr::bind_rows(
+                    questionnaireVariables, 
+                    dplyr::bind_cols(
+                        "Questionnaire" = 
+                            rep(
+                                dplyr::pull(result[1, "Questionnaire"]), 
+                                times = ncol(result)
+                            ), 
+                        "Variable" = colnames(result)
+                    )
+                )
 
             dfList[[length(dfList) + 1]] = result
             rm(result)
@@ -422,6 +448,35 @@ for (i in i:length(dataTypes)) {
     rm(m)
     gc()
 }
+
+# generate CREATE TABLE statement
+createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "QuestionnaireVariables", questionnaireVariables)
+
+# fix TEXT column types
+createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
+
+currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
+
+# write questionnaireVariables table to disk
+write.table(
+    questionnaireVariables,
+    file = currOutputFileName,
+    sep = "\t",
+    na = "",
+    row.names = FALSE,
+    col.names = FALSE,
+    quote = FALSE
+)
+
+# issue BULK INSERT
+insertStatement = paste(sep="",
+    "BULK INSERT ",
+    "QuestionnaireVariables",
+    " FROM '",
+    currOutputFileName,
+    "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+)
+SqlTools::dbSendUpdate(cn, insertStatement)
 
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
