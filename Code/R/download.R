@@ -238,7 +238,13 @@ skipDataTypes = c(
 )
 
 # track which variables appear in each questionnaire
-questionnaireVariables = dplyr::tibble(Questionnaire=character(), Variable=character())
+questionnaireVariables = dplyr::tibble(
+    Questionnaire=character(), 
+    Variable=character(), 
+    BeginYear=numeric(), 
+    EndYear=numeric(), 
+    TableName=character()
+)
 
 # enable restart
 i = 1
@@ -333,8 +339,11 @@ for (i in i:length(dataTypes)) {
             # append a column containing the questionnaire abbreviation
             result = dplyr::bind_cols(
                 result, 
-                dplyr::tibble("Questionnaire" = rep(x=gsub(pattern=".XPT", replace="", fixed=TRUE, fileName), times=nrow(result)))
+                dplyr::tibble("Questionnaire" = rep(x=gsub(pattern="\\.XPT", replace="", fixed=FALSE, ignore.case=TRUE, fileName), times=nrow(result)))
             )
+
+            beginYear = as.numeric(strsplit(x=currYears, split="-")[[1]][1])
+            endYear = as.numeric(strsplit(x=currYears, split="-")[[1]][2])
 
             # save mapping from questionnaire to variables
             questionnaireVariables =
@@ -346,7 +355,10 @@ for (i in i:length(dataTypes)) {
                                 dplyr::pull(result[1, "Questionnaire"]), 
                                 times = ncol(result)
                             ), 
-                        "Variable" = colnames(result)
+                        "Variable" = colnames(result),
+                        "BeginYear" = rep(beginYear, times = ncol(result)),
+                        "EndYear" = rep(endYear, times = ncol(result)),
+                        "TableName" = rep(currDataType, times = ncol(result))
                     )
                 )
 
@@ -456,6 +468,9 @@ createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "QuestionnaireVariables", qu
 # fix TEXT column types
 createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
 
+# change DOUBLE to float
+createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+
 # create the table in SQL
 SqlTools::dbSendUpdate(cn, createTableQuery)
 
@@ -491,3 +506,36 @@ SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
+# create views named as the NHANES questionnaire abbreviations
+m = DBI::dbGetQuery(cn, "
+    SELECT TABLE_NAME
+    FROM INFORMATION_SCHEMA.TABLES
+    WHERE 
+        TABLE_TYPE = 'BASE TABLE' 
+        AND TABLE_CATALOG='NhanesLandingZone'
+        AND TABLE_NAME != 'QuestionnaireVariables'
+")
+
+for (i in 1:nrow(m)) {
+    
+    currTableName = m[i,"TABLE_NAME"]
+    questionnaireLables = DBI::dbGetQuery(
+        cn, 
+        paste(
+            sep="", 
+            "SELECT Questionnaire FROM ", currTableName, " GROUP BY Questionnaire")
+        )
+    
+    for (j in 1:nrow(questionnaireLables)) {
+        
+        currQuestionnaire = questionnaireLables[j, "Questionnaire"]
+        DBI::dbGetQuery(
+            cn, 
+            paste(sep="", "CREATE VIEW ", currQuestionnaire, " AS SELECT * FROM ", currTableName, " WHERE Questionnaire = '", currQuestionnaire, "'"))
+    }
+}
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+

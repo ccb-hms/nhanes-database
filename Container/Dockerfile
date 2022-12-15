@@ -308,6 +308,7 @@ RUN mkdir /HostData
 RUN mkdir /NHANES
 COPY Code/R/download.R /NHANES/download.R
 COPY Code/R/regressionExample.R /NHANES/regressionExample.R
+COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
 RUN chmod -R 777 /NHANES
 
 RUN mkdir /NHANES/Data
@@ -318,5 +319,18 @@ ARG SA_PASSWORD=yourStrong(!)Password
 # run the download and database build
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/download.R --container-build=TRUE
+
+# run the ETL process to load variable metadata
+# run the ETL process to load variable metadata
+WORKDIR /tmp
+RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
+WORKDIR /tmp/NHANES-metadata
+RUN git checkout tags/1.2.0
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/etlVariableCodebook.R
+
+# install packages, which require newer version of rvest in conflict with the download / build script
+RUN Rscript -e "remotes::install_version('nhanesA', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.7.1')"
+RUN Rscript -e "remotes::install_version('DT', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.26')"
 
 CMD ["/startup/startup.sh"]
