@@ -193,22 +193,6 @@ cn = MsSqlTools::connectMsSqlSqlLogin(
     database = sqlDefaultDb
 )
 
-# # create new DB
-# SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesTest")
-# SqlTools::dbSendUpdate(cn, "USE NhanesTest")
-
-# # generate dummy code to check validity of table names
-# stmts = paste(sep="", "CREATE TABLE [", dataTypes, "] (id int);")
-
-# # attempt to create all of the dummy tables
-# for (currStmt in stmts) {
-#     SqlTools::dbSendUpdate(cn, currStmt)
-# }
-
-# # if that worked, drop the DB
-# SqlTools::dbSendUpdate(cn, "USE master")
-# SqlTools::dbSendUpdate(cn, "DROP DATABASE NhanesTest")
-
 #--------------------------------------------------------------------------------------------------------
 # performance notes for large XPTs:
 # 14.6G for a single PAXMIN
@@ -234,7 +218,11 @@ skipDataTypes = c(
     "PhysicalActivityMonitorRawData80hz",           # only available by FTP
     "VitaminD",                                     # Vitamin D data is broken and redirects to HTML instead of SAS data file
     "OralMicrobiomeProject",                        # redirect to an ASP page
-    "PhysicalActivityMonitorAmbientLightRawData"    # broken links
+    "PhysicalActivityMonitorAmbientLightRawData",   # broken links
+    "AlcoholUseYouth",                              # broken links, not suppoosed to be available for download anyway
+    "ChlamydiaPgp3plasmidgeneproduct3ELISAenzymelinkedimmunosorbentassayAndmultiplexbeadarrayMBAresultsYouth",   # broken links
+    "ChlamydiaUrineAdult",                          # not publicly available
+    "ChlamydiaUrineYouth"                           # not publicly available
 )
 
 # track which variables appear in each questionnaire
@@ -248,6 +236,12 @@ questionnaireVariables = dplyr::tibble(
 
 # enable restart
 i = 1
+downloadErrors = dplyr::tibble(
+    DataType=character(), 
+    FileUrl=character(), 
+    Error=character()
+)
+
 for (i in i:length(dataTypes)) {
 
     # get the name of the data type
@@ -256,6 +250,8 @@ for (i in i:length(dataTypes)) {
     if (currDataType %in% skipDataTypes) {
         next
     }
+    
+    print(currDataType)
 
     # find all rows with URLs that should be relevant to the current data type
     rowsForCurrDataType = which(fileListTable[,"ScrubbedDataType"] == currDataType)
@@ -287,7 +283,9 @@ for (i in i:length(dataTypes)) {
         # skipDataTypes - based approach above
         if (
             currFileUrl != "https://wwwn.cdc.govNA"
+            
             && currFileUrl != "https://wwwn.cdc.gov/Nchs/Nhanes/Dxa/Dxa.aspx"
+
             && currFileUrl != "https://wwwn.cdc.gov/Nchs/Nhanes/2005-2006/PAXRAW_D.ZIP"
             && currFileUrl != "https://wwwn.cdc.gov/Nchs/Nhanes/2003-2004/PAXRAW_C.ZIP"
             && currFileUrl != "https://wwwn.cdc.gov/Nchs/Nhanes/2007-2008/SPXRAW_E.ZIP"
@@ -296,32 +294,40 @@ for (i in i:length(dataTypes)) {
         ) {
             cat("reading ", currFileUrl, "\n")
 
-            # loop to catch errors in transfer and re-run after brief wait
-            result = "error"
-            while (result == "error" || result == "warning") {
-
-                result = tryCatch({
-                    currTemp = tempfile()
-                    utils::download.file(
-                        url = currFileUrl, 
-                        destfile = currTemp
+            # attempt to download each file and log errors
+            result = tryCatch({
+                currTemp = tempfile()
+                utils::download.file(
+                    url = currFileUrl, 
+                    destfile = currTemp
+                )
+                z = haven::read_xpt(currTemp)
+                file.remove(currTemp)
+                z
+            }, warning = function(w) {
+                downloadErrors <<- dplyr::bind_rows(
+                    downloadErrors, 
+                    dplyr::bind_cols(
+                        "DataType" = currDataType, 
+                        "FileUrl" = currFileUrl,
+                        "Error" = "warning"
                     )
-                    z = haven::read_xpt(currTemp)
-                    file.remove(currTemp)
-                    z
-                }, warning = function(w) {
-                    print(w)
-                    Sys.sleep(2)
-                    return("warning")
-                }, error = function(e) {
-                    print(e)
-                    Sys.sleep(2)
-                    if (runningInContainerBuild) {
-                        quit(status=99, save="no")
-                    } else {
-                        return("error")
-                    }
-                })
+                )
+                return("warning")
+            }, error = function(e) {
+                downloadErrors <<- dplyr::bind_rows(
+                    downloadErrors, 
+                    dplyr::bind_cols(
+                        "DataType" = currDataType, 
+                        "FileUrl" = currFileUrl,
+                        "Error" = "error"
+                    )
+                )
+                return("error")
+            })
+            
+            if (result == "warning" || result == "error") {
+                next
             }
 
             # save the survey years in the demographics table
@@ -380,6 +386,11 @@ for (i in i:length(dataTypes)) {
                 dfList[[j]][,"KID221"] = as.character(dfList[[j]][,"KID221"][[1]])
             }
         }
+    }
+
+    ## if we were unable to pull any files for this data type, then move on
+    if (length(dfList) == 0) {
+        next
     }
 
     # combine the rows from all of the SAS files for this data type
@@ -536,6 +547,42 @@ for (i in 1:nrow(m)) {
     }
 }
 
+# create a table to hold records of the failed file downloads
+SqlTools::dbSendUpdate(cn, "CREATE TABLE DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")
+
+# generate file name for temporary output
+currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
+
+# write failed file downloads table to disk
+write.table(
+    downloadErrors,
+    file = currOutputFileName,
+    sep = "\t",
+    na = "",
+    row.names = FALSE,
+    col.names = FALSE,
+    quote = FALSE
+)
+
+# issue BULK INSERT
+insertStatement = paste(sep="",
+    "BULK INSERT ",
+    "DownloadErrors",
+    " FROM '",
+    currOutputFileName,
+    "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+)
+
+SqlTools::dbSendUpdate(cn, insertStatement)
+
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "SHUTDOWN")
