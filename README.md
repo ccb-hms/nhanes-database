@@ -21,7 +21,7 @@ docker \
         -e 'CONTAINER_USER_PASSWORD=PASSWORD' \
         -e 'ACCEPT_EULA=Y' \
         -e 'SA_PASSWORD=yourStrong(!)Password' \
-        hmsccb/nhanes-workbench:jan-09-2023
+        hmsccb/nhanes-workbench:sept-12-2021
 ```
 
 ### Parameters
