@@ -7,6 +7,9 @@ The image contains SQL Server for Linux, R, RStudio Server, among other utilitie
 ## Running the image
 An image with a pre-built database can be run as follows:
 
+
+## Docker image version currently jan-09-2023, will need to update once newest version is created
+
 ```
 docker \
     run \
@@ -21,7 +24,7 @@ docker \
         -e 'CONTAINER_USER_PASSWORD=PASSWORD' \
         -e 'ACCEPT_EULA=Y' \
         -e 'SA_PASSWORD=yourStrong(!)Password' \
-        hmsccb/nhanes-workbench:sept-12-2021
+        hmsccb/nhanes-workbench:jan-09-2023
 ```
 
 ### Parameters
