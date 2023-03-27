@@ -7,6 +7,8 @@ The image contains SQL Server for Linux, R, RStudio Server, among other utilitie
 ## Running the image
 An image with a pre-built database can be run as follows:
 
+## Docker image version currently jan-09-2023, will need to update once newest version is created
+
 ```
 docker \
     run \
