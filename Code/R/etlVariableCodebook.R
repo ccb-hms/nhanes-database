@@ -243,12 +243,12 @@ SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 ontology_mappings <- list.files(ontologyMappings)
 
 for (currTable in ontology_mappings) {
-    if (currTable == "nhanes_variables_mappings.csv") {
+    if (currTable == "nhanes_variables_mappings.tsv") {
     path = ontologyMappings
     loaded_data <- read.csv(file = paste0(path, currTable))
 
     # generate SQL table definitions from column types in tibbles
-    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), str_extract(currTable, '.*(?=\\.csv)'), loaded_data) # nolint
+    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), str_extract(currTable, '.*(?=\\.tsv)'), loaded_data) # nolint
 
     # change TEXT to VARCHAR(256)
     createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
@@ -262,10 +262,10 @@ for (currTable in ontology_mappings) {
     # run bulk insert
     insertStatement = paste(sep="",
                             "BULK INSERT ",
-                            str_extract(currTable, '.*(?=\\.csv)'),
+                            str_extract(currTable, '.*(?=\\.tsv)'),
                             " FROM '",
                             paste0(path, currTable),
-                            "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = ',', ROWTERMINATOR = '\n')"
+                            "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
     )
     SqlTools::dbSendUpdate(cn, insertStatement)
 
