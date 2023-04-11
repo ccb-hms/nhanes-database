@@ -193,93 +193,93 @@ SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 #--------------------------------------------------------------------------------------------------------
 # Add Ontology Tables
 #--------------------------------------------------------------------------------------------------------
-ontology_tables <- list.files(ontologyTables)
+# ontology_tables <- list.files(ontologyTables)
 
-for (currTable in ontology_tables) {
-    if (currTable != "README.md") {
-    path = ontologyTables
-    loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
-    # generate SQL table definitions from column types in tibbles
-    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), str_extract(currTable, '.*(?=\\.tsv)'), loaded_data) # nolint
+# for (currTable in ontology_tables) {
+#     if (currTable != "README.md") {
+#     path = ontologyTables
+#     loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
+#     # generate SQL table definitions from column types in tibbles
+#     createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), str_extract(currTable, '.*(?=\\.tsv)'), loaded_data) # nolint
 
-    # change TEXT to VARCHAR(256)
-    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
+#     # change TEXT to VARCHAR(256)
+#     createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
 
-    # change DOUBLE to float
-    createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+#     # change DOUBLE to float
+#     createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
 
-    # create the table in SQL
-    SqlTools::dbSendUpdate(cn, createTableQuery)
+#     # create the table in SQL
+#     SqlTools::dbSendUpdate(cn, createTableQuery)
 
-    # run bulk insert
-    insertStatement = paste(sep="",
-                            "BULK INSERT ",
-                            str_extract(currTable, '.*(?=\\.tsv)'),
-                            " FROM '",
-                            paste0(path, currTable),
-                            "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
-    )
-    SqlTools::dbSendUpdate(cn, insertStatement)
+#     # run bulk insert
+#     insertStatement = paste(sep="",
+#                             "BULK INSERT ",
+#                             str_extract(currTable, '.*(?=\\.tsv)'),
+#                             " FROM '",
+#                             paste0(path, currTable),
+#                             "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
+#     )
+#     SqlTools::dbSendUpdate(cn, insertStatement)
 
-    # if we don't want to keep the derived text files, then delete to save disk space
-    if (!persistTextFiles) {
-      file.remove(paste0(path, currTable))
-    }
+#     # if we don't want to keep the derived text files, then delete to save disk space
+#     if (!persistTextFiles) {
+#       file.remove(paste0(path, currTable))
+#     }
 
-  # keep memory as clean as possible
-  rm(loaded_data)
-  gc()
- }
-}
+#   # keep memory as clean as possible
+#   rm(loaded_data)
+#   gc()
+#  }
+# }
 
-# shrink transaction log
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+# # shrink transaction log
+# SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+# # issue checkpoint
+# SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-# --------------------------------------------------------------------------------------------------------
-# Add Ontology Mappings
-# --------------------------------------------------------------------------------------------------------
-ontology_mappings <- list.files(ontologyMappings)
+# # --------------------------------------------------------------------------------------------------------
+# # Add Ontology Mappings
+# # --------------------------------------------------------------------------------------------------------
+# ontology_mappings <- list.files(ontologyMappings)
 
-for (currTable in ontology_mappings) {
-    if (currTable == "nhanes_variables_mappings.tsv") {
-    path = ontologyMappings
-    loaded_data <- read.csv(file = paste0(path, currTable))
+# for (currTable in ontology_mappings) {
+#     if (currTable == "nhanes_variables_mappings.tsv") {
+#     path = ontologyMappings
+#     loaded_data <- read.csv(file = paste0(path, currTable))
 
-    # generate SQL table definitions from column types in tibbles
-    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), str_extract(currTable, '.*(?=\\.tsv)'), loaded_data) # nolint
+#     # generate SQL table definitions from column types in tibbles
+#     createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), str_extract(currTable, '.*(?=\\.tsv)'), loaded_data) # nolint
 
-    # change TEXT to VARCHAR(256)
-    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
+#     # change TEXT to VARCHAR(256)
+#     createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
 
-    # change DOUBLE to VARCHAR(256)
-    createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" VARCHAR(512)", fixed = TRUE)
+#     # change DOUBLE to VARCHAR(256)
+#     createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" VARCHAR(512)", fixed = TRUE)
 
-    # create the table in SQL
-    SqlTools::dbSendUpdate(cn, createTableQuery)
+#     # create the table in SQL
+#     SqlTools::dbSendUpdate(cn, createTableQuery)
 
-    # run bulk insert
-    insertStatement = paste(sep="",
-                            "BULK INSERT ",
-                            str_extract(currTable, '.*(?=\\.tsv)'),
-                            " FROM '",
-                            paste0(path, currTable),
-                            "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
-    )
-    SqlTools::dbSendUpdate(cn, insertStatement)
+#     # run bulk insert
+#     insertStatement = paste(sep="",
+#                             "BULK INSERT ",
+#                             str_extract(currTable, '.*(?=\\.tsv)'),
+#                             " FROM '",
+#                             paste0(path, currTable),
+#                             "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
+#     )
+#     SqlTools::dbSendUpdate(cn, insertStatement)
 
-    # if we don't want to keep the derived text files, then delete to save disk space
-    if (!persistTextFiles) {
-      file.remove(paste0(path, currTable))
-    }
+#     # if we don't want to keep the derived text files, then delete to save disk space
+#     if (!persistTextFiles) {
+#       file.remove(paste0(path, currTable))
+#     }
 
-  # keep memory as clean as possible
-  rm(loaded_data)
-  gc()
- }
-}
+#   # keep memory as clean as possible
+#   rm(loaded_data)
+#   gc()
+#  }
+# }
 
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+# # issue checkpoint
+# SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
