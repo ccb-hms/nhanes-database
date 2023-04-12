@@ -23,7 +23,7 @@ sqlPassword = "yourStrong(!)Password"
 sqlDefaultDb = "NhanesLandingZone"
 
 # loop waiting for SQL Server database to become available
-for (i in 1:30) {
+for (i in 1:60) {
     cn = tryCatch(
         # connect to SQL
         MsSqlTools::connectMsSqlSqlLogin(
@@ -40,7 +40,7 @@ for (i in 1:30) {
     
     suppressWarnings({
          if (is.na(cn)) {
-            Sys.sleep(6)
+            Sys.sleep(10)
         } else {
             break
         }
