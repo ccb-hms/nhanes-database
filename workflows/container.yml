@@ -25,6 +25,5 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:1.0.0
-        build-args: |
-              collection_date="04/10/2023"
+        tags: hmsccb/nhanes-workbench:1.0.0
+        build-args: collection_date="04/10/2023"

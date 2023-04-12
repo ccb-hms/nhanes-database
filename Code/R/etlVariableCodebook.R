@@ -245,7 +245,7 @@ ontology_mappings <- list.files(ontologyMappings)
 for (currTable in ontology_mappings) {
     if (currTable == "nhanes_variables_mappings.tsv") {
     path = ontologyMappings
-    loaded_data <- read.csv(file = paste0(path, currTable))
+    loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
 
     # generate SQL table definitions from column types in tibbles
     createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), str_extract(currTable, '.*(?=\\.tsv)'), loaded_data) # nolint
