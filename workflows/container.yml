@@ -19,11 +19,12 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-    - name: Build and push to Docker Hub
+    - name: Build, Tag, and Push to Docker Hub
       uses: docker/build-push-action@v4
       with:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: hmsccb/nhanes-workbench:1.0.0
-        build-args: collection_date="04/10/2023"
+        tags: 1.0.0
+        build-args: |
+        collection_date=04-10-2023
