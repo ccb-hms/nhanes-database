@@ -21,18 +21,11 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-    - name: Extract metadata for the Docker image
-      id: meta
-      uses: docker/metadata-action@v2
-      with:
-        images: hmsccb/nhanes-workbench
-
     - name: Build, Tag, and Push to Docker Hub
       uses: docker/build-push-action@v4
       with:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: hmsccb/nhanes-workbench:${{ steps.meta.outputs.tag }} , hmsccb/nhanes-workbench:latest
-        labels: ${{ steps.meta.outputs.labels }}
+        tags: hmsccb/nhanes-workbench:1.0.0 , hmsccb/nhanes-workbench:latest
         build-args: collection_date=04-10-2023
