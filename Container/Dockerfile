@@ -274,8 +274,8 @@ RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
 RUN mkdir /opt/rstudioserver
 WORKDIR /opt/rstudioserver
 
-RUN wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl1.0/libssl1.0.0_1.0.2n-1ubuntu5.10_amd64.deb
-RUN dpkg -i ./libssl1.0.0_1.0.2n-1ubuntu5.10_amd64.deb
+RUN wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl1.0/libssl1.0.0_1.0.2n-1ubuntu5_amd64.deb
+RUN dpkg -i ./libssl1.0.0_1.0.2n-1ubuntu5_amd64.deb
 
 RUN apt-get update && apt-get install -y gdebi-core
 
@@ -315,16 +315,19 @@ RUN chmod -R 777 /NHANES/Data
 
 ARG ACCEPT_EULA=Y
 ARG SA_PASSWORD=yourStrong(!)Password
+
 # run the download and database build
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/download.R --container-build=TRUE
 	
-# run the ETL process to load variable metadata
+# # run the ETL process to load variable metadata
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
 WORKDIR /tmp
 RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /tmp/NHANES-metadata
-RUN git checkout tags/v1.3.0
+RUN git fetch --tags
+RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
+RUN git checkout $latestTag
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
 
