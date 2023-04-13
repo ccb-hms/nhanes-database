@@ -35,5 +35,4 @@ jobs:
         push: true
         tags: hmsccb/nhanes-workbench:${{ steps.meta.outputs.tag }} , hmsccb/nhanes-workbench:latest
         labels: ${{ steps.meta.outputs.labels }}
-        build-args: |
-        collection_date=04-10-2023
+        build-args: collection_date=04-10-2023
