@@ -1,6 +1,12 @@
+name: Tag, Build, and Push Docker Image with Github Workflow
+
 on: 
   push:
-    branches: main
+    tags: [ v* ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-container:
@@ -16,8 +22,15 @@ jobs:
     - name: login to Docker Hub
       uses: docker/login-action@v2
       with:
+        registry: ${{ env.REGISTRY }}
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    - name: Extract metadata for the Docker image
+      id: meta
+      uses: docker/metadata-action@v2
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
     - name: Build, Tag, and Push to Docker Hub
       uses: docker/build-push-action@v4
@@ -25,6 +38,7 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: 1.0.0
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
         build-args: |
         collection_date=04-10-2023
