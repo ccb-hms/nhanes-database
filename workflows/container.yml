@@ -2,11 +2,7 @@ name: Tag, Build, and Push Docker Image with Github Workflow
 
 on: 
   push:
-    tags: [ v* ]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+    branches: sam-dev
 
 jobs:
   build-container:
@@ -22,7 +18,6 @@ jobs:
     - name: login to Docker Hub
       uses: docker/login-action@v2
       with:
-        registry: ${{ env.REGISTRY }}
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
@@ -38,7 +33,7 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: ${{ steps.meta.outputs.tags }}
+        tags: hmsccb/nhanes-workbench:${{ steps.meta.outputs.tag }} , hmsccb/nhanes-workbench:latest
         labels: ${{ steps.meta.outputs.labels }}
         build-args: |
         collection_date=04-10-2023
