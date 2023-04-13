@@ -25,7 +25,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v2
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        images: hmsccb/nhanes-workbench
 
     - name: Build, Tag, and Push to Docker Hub
       uses: docker/build-push-action@v4
