@@ -28,6 +28,9 @@ optionList = list(
 optParser = optparse::OptionParser(option_list=optionList);
 opt = optparse::parse_args(optParser);
 
+DOCKER_VERSION <- Sys.getenv("DOCKER_VERSION", TRUE)
+COLLECTION_DATE <- Sys.getenv("COLLECTION_DATE", TRUE)
+
 # this varaible is used below to determine how to handle errors.
 # if running in a container build process, any errors encountered
 # in the processing of the files should cause R to return non-zero
