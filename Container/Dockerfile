@@ -315,8 +315,8 @@ RUN chmod -R 777 /NHANES/Data
 
 ARG ACCEPT_EULA=Y
 ARG SA_PASSWORD=yourStrong(!)Password
-ARG DOCKER_VERSION = 1.0.0
-ARG COLLECTION_DATE = 4-14-2023
+ARG DOCKER_VERSION=1.0.0
+ARG COLLECTION_DATE=4-14-2023
 
 # # run the download and database build
 # RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
