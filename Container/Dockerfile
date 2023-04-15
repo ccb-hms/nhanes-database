@@ -322,20 +322,20 @@ ARG DOCKER_VERSION=1.0.0
 ENV DOCKER_VERSION=$DOCKER_VERSION
 ENV COLLECTION_DATE=$COLLECTION_DATE
 
-# # run the download and database build
-# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-# 	&& Rscript /NHANES/download.R --container-build=TRUE
+# run the download and database build
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/download.R --container-build=TRUE
 	
-# # # run the ETL process to load variable metadata
-# COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
-# WORKDIR /tmp
-# RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
-# WORKDIR /tmp/NHANES-metadata
-# RUN git fetch --tags
-# RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
-# RUN git checkout $latestTag
-# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-# 	&& Rscript /NHANES/etlVariableCodebook.R
+# # run the ETL process to load variable metadata
+COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
+WORKDIR /tmp
+RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
+WORKDIR /tmp/NHANES-metadata
+RUN git fetch --tags
+RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
+RUN git checkout $latestTag
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/etlVariableCodebook.R
 
 # install packages, which require newer version of rvest in conflict with the download / build script
 RUN Rscript -e "remotes::install_version('nhanesA', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.7.1')"
