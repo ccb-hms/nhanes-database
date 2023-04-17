@@ -28,10 +28,10 @@ optionList = list(
 optParser = optparse::OptionParser(option_list=optionList);
 opt = optparse::parse_args(optParser);
 
-EPICONDUCTOR_CONTAINER_VERSION  <- Sys.getenv("EPICONDUCTOR_CONTAINER_VERSION ")
+EPICONDUCTOR_CONTAINER_VERSION  <- Sys.getenv("EPICONDUCTOR_CONTAINER_VERSION")
 COLLECTION_DATE <- Sys.getenv("COLLECTION_DATE")
 
-print(EPICONDUCTOR_CONTAINER_VERSION )
+print(EPICONDUCTOR_CONTAINER_VERSION)
 print(COLLECTION_DATE)
 
 # this varaible is used below to determine how to handle errors.
@@ -523,6 +523,8 @@ insertStatement = paste(sep="",
                         "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
 )
 SqlTools::dbSendUpdate(cn, insertStatement)
+
+SqlTools::dbSendUpdate(cn, "UPDATE [NhanesLandingZone].[dbo].[QuestionnaireVariables] SET Description =  'Respondent sequence number', SasLabel =  'Respondent sequence number' WHERE Variable = 'SEQN'")
 
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
