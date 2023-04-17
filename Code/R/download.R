@@ -28,10 +28,10 @@ optionList = list(
 optParser = optparse::OptionParser(option_list=optionList);
 opt = optparse::parse_args(optParser);
 
-DOCKER_VERSION <- Sys.getenv("DOCKER_VERSION")
+EPICONDUCTOR_CONTAINER_VERSION  <- Sys.getenv("EPICONDUCTOR_CONTAINER_VERSION ")
 COLLECTION_DATE <- Sys.getenv("COLLECTION_DATE")
 
-print(DOCKER_VERSION)
+print(EPICONDUCTOR_CONTAINER_VERSION )
 print(COLLECTION_DATE)
 
 # this varaible is used below to determine how to handle errors.
