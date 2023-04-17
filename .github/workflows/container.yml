@@ -2,7 +2,10 @@ name: Tag, Build, and Push Docker Image with Github Workflow
 
 on: 
   push:
-    branches: main
+    branches: 
+      - main
+    paths-ignore:
+      - '**/README.md'
 
 jobs:
   build-container:

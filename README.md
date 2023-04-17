@@ -5,10 +5,7 @@ This repository contains R code and a Docker image definition that facilitate pu
 The image contains SQL Server for Linux, R, RStudio Server, among other utilities.
 
 ## Running the image
-An image with a pre-built database can be run as follows:
-
-
-## Docker image version currently jan-09-2023, will need to update once newest version is created
+An image with a pre-built database can be run as follows (for other versions, see the [Dockerhub repository](https://hub.docker.com/r/hmsccb/nhanes-workbench/tags) and use the desired tag instead of 'latest'):
 
 ```
 docker \
@@ -24,7 +21,7 @@ docker \
         -e 'CONTAINER_USER_PASSWORD=PASSWORD' \
         -e 'ACCEPT_EULA=Y' \
         -e 'SA_PASSWORD=yourStrong(!)Password' \
-        hmsccb/nhanes-workbench:jan-09-2023
+        hmsccb/nhanes-workbench:latest
 ```
 
 ### Parameters
