@@ -187,6 +187,8 @@ SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_variables")
 # shrink transaction log
 SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
+SqlTools::dbSendUpdate(cn, "UPDATE [NhanesLandingZone].[dbo].[QuestionnaireVariables] SET Description =  'Respondent sequence number', SasLabel =  'Respondent sequence number' WHERE Variable = 'SEQN'")
+
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 

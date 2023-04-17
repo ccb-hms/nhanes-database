@@ -524,8 +524,6 @@ insertStatement = paste(sep="",
 )
 SqlTools::dbSendUpdate(cn, insertStatement)
 
-SqlTools::dbSendUpdate(cn, "UPDATE [NhanesLandingZone].[dbo].[QuestionnaireVariables] SET Description =  'Respondent sequence number', SasLabel =  'Respondent sequence number' WHERE Variable = 'SEQN'")
-
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
