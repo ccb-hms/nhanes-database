@@ -330,6 +330,7 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awai
 	
 # # run the ETL process to load variable metadata
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
+COPY Code/R/createQuestionnaireViews.R /NHANES/createQuestionnaireViews.R
 WORKDIR /tmp
 RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /tmp/NHANES-metadata
@@ -338,6 +339,8 @@ RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/createQuestionnaireViews.R
 
 # install packages, which require newer version of rvest in conflict with the download / build script
 RUN Rscript -e "remotes::install_version('nhanesA', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.7.1')"

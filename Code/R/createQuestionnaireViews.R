@@ -12,12 +12,19 @@ cn = MsSqlTools::connectMsSqlSqlLogin(
 )
 
 m = DBI::dbGetQuery(cn, "
-    SELECT TABLE_NAME
-    FROM INFORMATION_SCHEMA.TABLES
-    WHERE 
-        TABLE_TYPE = 'BASE TABLE' 
-        AND TABLE_CATALOG='NhanesLandingZone'
-        AND TABLE_NAME != 'QuestionnaireVariables'
+SELECT TABLE_NAME
+FROM INFORMATION_SCHEMA.TABLES
+WHERE 
+    TABLE_TYPE = 'BASE TABLE' 
+    AND TABLE_CATALOG='NhanesLandingZone'
+    AND TABLE_NAME != 'QuestionnaireVariables'
+    AND TABLE_NAME != 'DownloadErrors'
+    AND TABLE_NAME != 'VariableCodebook'
+    AND TABLE_NAME != 'QuestionnaireDescriptions'
+    AND TABLE_NAME != 'ontology_entailed_edges'
+    AND TABLE_NAME != 'ontology_labels'
+    AND TABLE_NAME != 'ontology_edges'
+    AND TABLE_NAME != 'nhanes_variables_mappings'
 ")
 
 for (i in 1:nrow(m)) {
