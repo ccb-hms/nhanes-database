@@ -339,7 +339,7 @@ RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awaiting server bootup" && sleep 15 && echo "lets try to logon"  && /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P ${SA_PASSWORD})' \
 	&& Rscript /NHANES/createQuestionnaireViews.R
 
 # install packages, which require newer version of rvest in conflict with the download / build script
