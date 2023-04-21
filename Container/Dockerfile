@@ -253,10 +253,12 @@ RUN Rscript -e "remotes::install_cran('odbc')"
 RUN Rscript --vanilla -e "remotes::install_cran('lme4', repos='"$R_REPOSITORY"')"
 RUN Rscript --vanilla -e "remotes::install_cran('survminer', repos='"$R_REPOSITORY"')"
 
+RUN Rscript -e "remotes::install_cran('devtools')"
+
 # install R packages for connecting to SQL Server and working with resulting data sets
-RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/FactToCube.git', ref='v1.0.0')"
-RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/MsSqlTools.git', ref='v1.0.0')"
-RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/SqlTools.git', ref='v1.0.0')"
+RUN Rscript -e "remotes::install_github('https://github.com/nathan-palmer/FactToCube.git', ref='v1.0.0')"
+RUN Rscript -e "remotes::install_github('https://github.com/nathan-palmer/MsSqlTools.git', ref='v1.0.0')"
+RUN Rscript -e "remotes::install_github('https://github.com/nathan-palmer/SqlTools.git', ref='v1.0.0')"
 
 # additional packages for NHANES analyses
 RUN Rscript -e "remotes::install_cran('broom')"
