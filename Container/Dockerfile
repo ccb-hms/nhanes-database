@@ -120,6 +120,9 @@ RUN apt-get update \
 		cmake \
 	&& rm -rf /var/lib/apt/lists/*
 
+RUN apt-get -y purge python3.8
+RUN apt-get -y autoremove
+
 
 #------------------------------------------------------------------------------
 # Configure system tools
