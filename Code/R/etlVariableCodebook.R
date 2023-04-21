@@ -299,8 +299,43 @@ WHERE
     AND TABLE_NAME != 'ontology_labels'
     AND TABLE_NAME != 'ontology_edges'
     AND TABLE_NAME != 'nhanes_variables_mappings'
+    ORDER BY TABLE_NAME ASC
 ")
 
+#update all the questionnaire columns with the correct questionnaire names
+for (i in 1:nrow(m)) {
+    currTableName = m[i,"TABLE_NAME"]
+    DBI::dbGetQuery( cn, paste(sep="", "ALTER table ", currTableName, " add Description varchar(256)" ))
+    DBI::dbGetQuery( cn, paste(sep="", "UPDATE ", currTableName, " SET Description = QuestionnaireDescriptions.Description from ", currTableName ," LEFT JOIN QuestionnaireDescriptions ON ", currTableName, ".Questionnaire = QuestionnaireDescriptions.Questionnaire" ))
+    DBI::dbGetQuery( cn, paste(sep="", "UPDATE ", currTableName, " SET Description = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(Description, ':',''), '-', ''),' ',''),'.',''),'(', ''),')', ''), '&', ''), ',', '')"))
+}
+
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
+
+m = DBI::dbGetQuery(cn, "
+SELECT TABLE_NAME
+FROM INFORMATION_SCHEMA.TABLES
+WHERE 
+    TABLE_TYPE = 'BASE TABLE' 
+    AND TABLE_CATALOG='NhanesLandingZone'
+    AND TABLE_NAME != 'QuestionnaireVariables'
+    AND TABLE_NAME != 'DownloadErrors'
+    AND TABLE_NAME != 'VariableCodebook'
+    AND TABLE_NAME != 'QuestionnaireDescriptions'
+    AND TABLE_NAME != 'ontology_entailed_edges'
+    AND TABLE_NAME != 'ontology_labels'
+    AND TABLE_NAME != 'ontology_edges'
+    AND TABLE_NAME != 'nhanes_variables_mappings'
+    ORDER BY TABLE_NAME ASC
+")
+
+
+#testing
 for (i in 1:nrow(m)) {
     
     currTableName = m[i,"TABLE_NAME"]
@@ -312,15 +347,21 @@ for (i in 1:nrow(m)) {
         )
     
     for (j in 1:nrow(questionnaireLables)) {
-        
         currQuestionnaire = questionnaireLables[j, "Questionnaire"]
-        DBI::dbGetQuery(
-            cn, 
-            paste(sep="", "CREATE VIEW ", currQuestionnaire, " AS SELECT * FROM ", currTableName, " WHERE Questionnaire = '", currQuestionnaire, "'"))
+        tryCatch({
+                DBI::dbSendQuery(cn, paste(sep="", "CREATE VIEW ", currQuestionnaire, " AS SELECT * FROM ", currTableName, " WHERE Questionnaire = '", currQuestionnaire, "'"))
+                },
+                error = function(e) {
+                    DBI::dbSendQuery(cn, paste(sep="", "CREATE VIEW ", currQuestionnaire, "_view AS SELECT * FROM ", currTableName, " WHERE Questionnaire = '", currQuestionnaire, "'"))
+                }
+                )
+        # shrink transaction log
+        SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
     }
 }
 
 # shrink transaction log
 SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
