@@ -101,7 +101,7 @@ RUN apt-get update \
 		gnupg \
 		krb5-user \
 		python3-dev \
-		python3 \ 
+		python3.9 \ 
 		python3-pip \
 		alien \
 		libaio1 \
