@@ -125,8 +125,8 @@ RUN apt-get update \
 	&& apt-get install \
 		python3.9-dev \
 		python3.9 \ 
-		python3-pip \
-	&& rm -rf /var/lib/apt/lists/*
+		python3-pip
+		
 #------------------------------------------------------------------------------
 # Configure system tools
 #------------------------------------------------------------------------------
