@@ -338,7 +338,7 @@ RUN git fetch --tags
 RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
 
-RUN python3 -m pip install -U -i  https://pypi.org/projects/text2term
+RUN python3 -m pip3 install text2term
 RUN python3 -m pip install pandas
 RUN python3 -m pip install Owlready2
 RUN python3 code/preprocess_metadata.py
