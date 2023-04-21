@@ -338,7 +338,7 @@ RUN git fetch --tags
 RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
 
-RUN pip install --upgrade pip.
+RUN pip install --upgrade pip
 RUN pip install text2term
 RUN pip install pandas~=1.5.3
 RUN pip install Owlready2~=0.40
