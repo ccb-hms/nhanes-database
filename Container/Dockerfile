@@ -338,6 +338,7 @@ RUN git fetch --tags
 RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
 
+RUN pip install text2term
 RUN pip install -r code/requirements.txt
 RUN python3 code/preprocess_metadata.py
 RUN python3 code/generate_ontology_mappings.py
