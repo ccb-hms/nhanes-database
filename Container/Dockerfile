@@ -100,7 +100,7 @@ RUN apt-get update \
 		unixodbc-dev \
 		gnupg \
 		krb5-user \
-		python3-dev \
+		python3.9-dev \
 		python3.9 \ 
 		python3-pip \
 		alien \
