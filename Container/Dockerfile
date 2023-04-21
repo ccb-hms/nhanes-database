@@ -338,8 +338,8 @@ RUN git fetch --tags
 RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
 
-RUN python3 NHANES-metadata/code/preprocess_metadata.py
-RUN python3 NHANES-metadata/code/generate_ontology_mappings.py
+RUN python3 /code/preprocess_metadata.py
+RUN python3 /code/generate_ontology_mappings.py
 
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
