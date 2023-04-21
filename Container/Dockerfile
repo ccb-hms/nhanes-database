@@ -165,7 +165,9 @@ Driver = /usr/local/lib/libtdsodbc.so \n\
 
 # install pyodbc
 RUN pip3 install pyodbc
-
+RUN pip3 install text2term
+RUN pip3 install pandas
+RUN pip3 install Owlready2
 #------------------------------------------------------------------------------
 # Install and configure R
 #------------------------------------------------------------------------------
@@ -338,9 +340,6 @@ RUN git fetch --tags
 RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
 
-RUN python3 -m pip3 install text2term
-RUN python3 -m pip install pandas
-RUN python3 -m pip install Owlready2
 RUN python3 code/preprocess_metadata.py
 RUN python3 code/generate_ontology_mappings.py
 
