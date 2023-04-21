@@ -101,7 +101,7 @@ RUN apt-get update \
 		gnupg \
 		krb5-user \
 		python3-dev \
-		python3.9 \ 
+		python3 \ 
 		python3-pip \
 		alien \
 		libaio1 \
@@ -339,9 +339,9 @@ RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
 
 
-RUN pip install pandas
-RUN pip install Owlready2
-RUN pip install text2term
+RUN python3 -m pip install pandas
+RUN python3 -m pip install Owlready2
+RUN python3 -m pip install text2term
 RUN python3 code/preprocess_metadata.py
 RUN python3 code/generate_ontology_mappings.py
 
