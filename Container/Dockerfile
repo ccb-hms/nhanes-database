@@ -165,7 +165,7 @@ Driver = /usr/local/lib/libtdsodbc.so \n\
 
 # install pyodbc
 RUN pip3 install pyodbc
-RUN pip3 -v --log install text2term
+RUN pip3 -v --log /tmp/pip.log install text2term --upgrade
 RUN pip3 install pandas
 RUN pip3 install Owlready2
 #------------------------------------------------------------------------------
