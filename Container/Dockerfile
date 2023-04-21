@@ -171,10 +171,10 @@ Driver = /usr/local/lib/libtdsodbc.so \n\
 ' >> /etc/odbcinst.ini
 
 # install pyodbc
-RUN pip3 install pyodbc
-RUN pip3 -v --log /tmp/pip.log install text2term --upgrade
-RUN pip3 install pandas
-RUN pip3 install Owlready2
+RUN python3.9 -m pip3 install pyodbc
+RUN python3.9 -m pip3 -v --log /tmp/pip.log install text2term --upgrade
+RUN python3.9 -m pip3 install pandas
+RUN python3.9 -m pip3 install Owlready2
 #------------------------------------------------------------------------------
 # Install and configure R
 #------------------------------------------------------------------------------
