@@ -123,6 +123,8 @@ RUN apt-get update \
 RUN apt-get -y purge python3.8
 RUN apt-get -y autoremove
 
+RUN apt-get update && apt-get install python3-pip -y 
+
 RUN alias pip3='python3.9 -m pip'
 RUN alias python3='/usr/bin/python3.9'
 
