@@ -100,8 +100,8 @@ RUN apt-get update \
 		unixodbc-dev \
 		gnupg \
 		krb5-user \
-		python3.9-dev \
-		python3.9 \ 
+		python3-dev \
+		python3 \ 
 		python3-pip \
 		alien \
 		libaio1 \
@@ -120,10 +120,6 @@ RUN apt-get update \
 		cmake \
 	&& rm -rf /var/lib/apt/lists/*
 
-RUN apt-get -y purge python3.8
-RUN apt-get -y autoremove
-
-RUN apt-get update && apt-get install python3-pip -y 
 
 #------------------------------------------------------------------------------
 # Configure system tools
@@ -167,11 +163,9 @@ RUN echo '\n\
 Driver = /usr/local/lib/libtdsodbc.so \n\
 ' >> /etc/odbcinst.ini
 
-# # install pyodbc
-# RUN python3.9 -m pip install pyodbc
-# RUN python3.9 -m pip text2term
-# RUN python3.9 -m pip install pandas
-# RUN python3.9 -m pip install Owlready2
+# install pyodbc
+RUN pip3 install pyodbc
+
 #------------------------------------------------------------------------------
 # Install and configure R
 #------------------------------------------------------------------------------
@@ -249,8 +243,6 @@ RUN Rscript -e "remotes::install_cran('odbc')"
 # -- vanilla because there is a bug that causes the R intro / preamble text to get pushed into the compiler
 RUN Rscript --vanilla -e "remotes::install_cran('lme4', repos='"$R_REPOSITORY"')"
 RUN Rscript --vanilla -e "remotes::install_cran('survminer', repos='"$R_REPOSITORY"')"
-
-RUN Rscript -e "remotes::install_cran('devtools')"
 
 # install R packages for connecting to SQL Server and working with resulting data sets
 RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/FactToCube.git', ref='v1.0.0')"
@@ -343,8 +335,8 @@ RUN git fetch --tags
 RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
 
-# RUN python3 code/preprocess_metadata.py
-# RUN python3 code/generate_ontology_mappings.py
+# RUN python3 NHANES-metadata/code/preprocess_metadata.py
+# RUN python3 NHANES-metadata/code/generate_ontology_mappings.py
 
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
