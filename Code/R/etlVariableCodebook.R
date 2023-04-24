@@ -337,29 +337,34 @@ WHERE
 
 
 #testing
-for (i in 1:nrow(m)) {
-    
-    currTableName = m[i,"TABLE_NAME"]
-    questionnaireLables = DBI::dbGetQuery(
-        cn, 
-        paste(
-            sep="", 
-            "SELECT Questionnaire FROM ", currTableName, " GROUP BY Questionnaire")
-        )
-    
-    for (j in 1:nrow(questionnaireLables)) {
-        currQuestionnaire = questionnaireLables[j, "Questionnaire"]
-        tryCatch({
-                DBI::dbSendQuery(cn, paste(sep="", "CREATE VIEW ", currQuestionnaire, " AS SELECT * FROM ", currTableName, " WHERE Questionnaire = '", currQuestionnaire, "'"))
-                },
-                error = function(e) {
-                    DBI::dbSendQuery(cn, paste(sep="", "CREATE VIEW ", currQuestionnaire, "_view AS SELECT * FROM ", currTableName, " WHERE Questionnaire = '", currQuestionnaire, "'"))
-                }
-                )
-        # shrink transaction log
-        SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
-    }
+tryCatch({
+    for (i in 1:nrow(m)) {
+        
+        currTableName = m[i,"TABLE_NAME"]
+        questionnaireLables = DBI::dbGetQuery(
+            cn, 
+            paste(
+                sep="", 
+                "SELECT Questionnaire FROM ", currTableName, " GROUP BY Questionnaire")
+            )
+        
+        for (j in 1:nrow(questionnaireLables)) {
+            currQuestionnaire = questionnaireLables[j, "Questionnaire"]
+            tryCatch({
+                    DBI::dbSendQuery(cn, paste(sep="", "CREATE VIEW ", currQuestionnaire, " AS SELECT * FROM ", currTableName, " WHERE Questionnaire = '", currQuestionnaire, "'"))
+                    },
+                    error = function(e) {
+                        DBI::dbSendQuery(cn, paste(sep="", "CREATE VIEW ", currQuestionnaire, "_view AS SELECT * FROM ", currTableName, " WHERE Questionnaire = '", currQuestionnaire, "'"))
+                    }
+                    )
+            # shrink transaction log
+            SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+                                                }                                   
+                        }
 }
+error = function(e) {
+    print(e)
+})
 
 # shrink transaction log
 SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
