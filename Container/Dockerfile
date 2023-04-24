@@ -125,9 +125,6 @@ RUN apt-get -y autoremove
 
 RUN apt-get update && apt-get install python3-pip -y 
 
-RUN alias pip3='python3.9 -m pip'
-RUN alias python3='/usr/bin/python3.9'
-
 #------------------------------------------------------------------------------
 # Configure system tools
 #------------------------------------------------------------------------------
@@ -170,11 +167,11 @@ RUN echo '\n\
 Driver = /usr/local/lib/libtdsodbc.so \n\
 ' >> /etc/odbcinst.ini
 
-# install pyodbc
-RUN python3.9 -m pip install pyodbc
-RUN python3.9 -m pip -v --log /tmp/pip.log install text2term --upgrade
-RUN python3.9 -m pip install pandas
-RUN python3.9 -m pip install Owlready2
+# # install pyodbc
+# RUN python3.9 -m pip install pyodbc
+# RUN python3.9 -m pip text2term
+# RUN python3.9 -m pip install pandas
+# RUN python3.9 -m pip install Owlready2
 #------------------------------------------------------------------------------
 # Install and configure R
 #------------------------------------------------------------------------------
@@ -256,9 +253,9 @@ RUN Rscript --vanilla -e "remotes::install_cran('survminer', repos='"$R_REPOSITO
 RUN Rscript -e "remotes::install_cran('devtools')"
 
 # install R packages for connecting to SQL Server and working with resulting data sets
-RUN Rscript -e "remotes::install_github('https://github.com/nathan-palmer/FactToCube.git', ref='v1.0.0')"
-RUN Rscript -e "remotes::install_github('https://github.com/nathan-palmer/MsSqlTools.git', ref='v1.0.0')"
-RUN Rscript -e "remotes::install_github('https://github.com/nathan-palmer/SqlTools.git', ref='v1.0.0')"
+RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/FactToCube.git', ref='v1.0.0')"
+RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/MsSqlTools.git', ref='v1.0.0')"
+RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/SqlTools.git', ref='v1.0.0')"
 
 # additional packages for NHANES analyses
 RUN Rscript -e "remotes::install_cran('broom')"
@@ -333,9 +330,6 @@ ARG EPICONDUCTOR_CONTAINER_VERSION=1.0.0
 ENV EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION 
 ENV COLLECTION_DATE=$COLLECTION_DATE
 
-# run the download and database build
-RUN 
-
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awaiting server bootup" && sleep 15 && echo "lets try to logon"  && /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P ${SA_PASSWORD})' \
 	&& Rscript /NHANES/download.R --container-build=TRUE
 	
@@ -349,8 +343,8 @@ RUN git fetch --tags
 RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
 
-RUN python3 code/preprocess_metadata.py
-RUN python3 code/generate_ontology_mappings.py
+# RUN python3 code/preprocess_metadata.py
+# RUN python3 code/generate_ontology_mappings.py
 
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
