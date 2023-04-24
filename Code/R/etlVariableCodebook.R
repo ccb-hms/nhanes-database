@@ -299,6 +299,7 @@ WHERE
     AND TABLE_NAME != 'ontology_labels'
     AND TABLE_NAME != 'ontology_edges'
     AND TABLE_NAME != 'nhanes_variables_mappings'
+    AND TABLE_NAME != 'ontology_dbxrefs'
     ORDER BY TABLE_NAME ASC
 ")
 
