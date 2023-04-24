@@ -361,7 +361,7 @@ tryCatch({
             SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
                                                 }                                   
                         }
-}
+},
 error = function(e) {
     print(e)
 })
