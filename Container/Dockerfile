@@ -177,6 +177,9 @@ ENV R_VERSION_BUGFIX 1
 ENV R_VERSION $R_VERSION_MAJOR.$R_VERSION_MINOR.$R_VERSION_BUGFIX
 ENV R_HOME=/usr/local/lib/R
 
+ENV EPICONDUCTOR_CONTAINER_VERSION 1.0.0
+ENV COLLECTION_DATE 05-08-23
+
 WORKDIR /tmp
 RUN wget https://cran.r-project.org/src/base/R-4/R-$R_VERSION.tar.gz
 RUN tar zxvf R-$R_VERSION.tar.gz
@@ -315,12 +318,6 @@ RUN chmod -R 777 /NHANES/Data
 
 ARG ACCEPT_EULA=Y
 ARG SA_PASSWORD=yourStrong(!)Password
-
-ARG COLLECTION_DATE=4-14-2023
-ARG EPICONDUCTOR_CONTAINER_VERSION=1.0.0
-
-ENV EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION 
-ENV COLLECTION_DATE=$COLLECTION_DATE
 
 # run the download and database build
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awaiting server bootup" && sleep 15 && echo "lets try to logon"  && /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P ${SA_PASSWORD})' \
