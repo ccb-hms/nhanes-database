@@ -322,6 +322,7 @@ ARG EPICONDUCTOR_CONTAINER_VERSION=1.0.0
 ENV EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION 
 ENV COLLECTION_DATE=$COLLECTION_DATE
 
+# run the download and database build
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awaiting server bootup" && sleep 15 && echo "lets try to logon"  && /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P ${SA_PASSWORD})' \
 	&& Rscript /NHANES/download.R --container-build=TRUE
 	
@@ -334,9 +335,6 @@ WORKDIR /tmp/NHANES-metadata
 RUN git fetch --tags
 RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
 RUN git checkout $latestTag
-
-# RUN python3 NHANES-metadata/code/preprocess_metadata.py
-# RUN python3 NHANES-metadata/code/generate_ontology_mappings.py
 
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
