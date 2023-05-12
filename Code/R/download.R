@@ -97,8 +97,9 @@ fileListTable <- fileListTable[!grepl(pattern = "^P_", fileListTable$'Data File 
 # Remove the PAHS_H File specifically, the other PAHS files are OK.
 fileListTable <- fileListTable[!grepl("PAHS_H", fileListTable$'Data File Name'),]  
 
-# Create groups by removing anything after the first "_" from 'Data File Name' 
-fileListTable$'Data File Name' <- gsub('^(.*?)_.*', '\\1', as.character(fileListTable$'Data File Name'))
+# REFACTOR CHANGE - NO GROUPING
+# # Create groups by removing anything after the first "_" from 'Data File Name' 
+# fileListTable$'Data File Name' <- gsub('^(.*?)_.*', '\\1', as.character(fileListTable$'Data File Name'))
 
 # Skip the data types and URLs that cause issues
 fileListTable <- fileListTable[!grepl("https://wwwn.cdc.govNA", fileListTable$'Data File'),]  # invalid URL
@@ -120,94 +121,94 @@ fileListTable <- fileListTable[!grepl("PAXRAW", fileListTable$'Data File Name'),
 fileListTable <- fileListTable[!grepl("SPXRAW", fileListTable$'Data File Name'),]       # not publicly available
 fileListTable <- fileListTable[!grepl("PAXMIN", fileListTable$'Data File Name'),]       # not publicly available
 
-
-# clean up data type names
-fileListTable[,"Data File Name"] = 
-  unlist(
-    lapply(
-      X = fileListTable[,"Data File Name"],
-      FUN = function(x) {
-        return(
-          gsub(
-            gsub(
-              gsub(
-                gsub(
-                  gsub(
-                    gsub(
-                      gsub(
-                        gsub(
-                          gsub(
-                            gsub(
-                              gsub(
-                                gsub(
-                                  gsub(
-                                    gsub(
-                                      gsub(
-                                        x = x, 
-                                        pattern = " and ", 
-                                        replace = " And ", 
-                                        fixed = TRUE
-                                      ),
-                                      pattern = "/", 
-                                      replace = "", 
-                                      fixed = TRUE
-                                    ), 
-                                    pattern = " ", 
-                                    replace = "", 
-                                    fixed=TRUE
-                                  ), 
-                                  pattern = "-", 
-                                  replace = "", 
-                                  fixed=TRUE
-                                ), 
-                                pattern = "'", 
-                                replace="", 
-                                fixed=TRUE
-                              ),
-                              pattern = ",", 
-                              replace = "", 
-                              fixed = TRUE
-                            ),
-                            pattern = "&",
-                            replace = "And",
-                            fixed = TRUE
-                          ),
-                          pattern = ".",
-                          replace = "",
-                          fixed = TRUE
-                        ),
-                        pattern = "–",
-                        replace = "",
-                        fixed = TRUE
-                      ),
-                      pattern = ":",
-                      replace = "",
-                      fixed = TRUE
-                    ),
-                    pattern = "(",
-                    replace = "",
-                    fixed = TRUE
-                  ),
-                  pattern = ")",
-                  replace = "",
-                  fixed = TRUE
-                ),
-                pattern = ";",
-                replace = "",
-                fixed = TRUE
-              ),
-              pattern = "+",
-              replace = "",
-              fixed = "TRUE"
-            ),
-            pattern = "_",
-            replace = "",
-            fixed = TRUE
-          )
-        )
-      }
-    )
-  )
+# REFACTOR CHANGE - NO NEED FOR CLEANUP, TABLE NAMES PRESERVED
+# # clean up data type names
+# fileListTable[,"Data File Name"] = 
+#   unlist(
+#     lapply(
+#       X = fileListTable[,"Data File Name"],
+#       FUN = function(x) {
+#         return(
+#           gsub(
+#             gsub(
+#               gsub(
+#                 gsub(
+#                   gsub(
+#                     gsub(
+#                       gsub(
+#                         gsub(
+#                           gsub(
+#                             gsub(
+#                               gsub(
+#                                 gsub(
+#                                   gsub(
+#                                     gsub(
+#                                       gsub(
+#                                         x = x, 
+#                                         pattern = " and ", 
+#                                         replace = " And ", 
+#                                         fixed = TRUE
+#                                       ),
+#                                       pattern = "/", 
+#                                       replace = "", 
+#                                       fixed = TRUE
+#                                     ), 
+#                                     pattern = " ", 
+#                                     replace = "", 
+#                                     fixed=TRUE
+#                                   ), 
+#                                   pattern = "-", 
+#                                   replace = "", 
+#                                   fixed=TRUE
+#                                 ), 
+#                                 pattern = "'", 
+#                                 replace="", 
+#                                 fixed=TRUE
+#                               ),
+#                               pattern = ",", 
+#                               replace = "", 
+#                               fixed = TRUE
+#                             ),
+#                             pattern = "&",
+#                             replace = "And",
+#                             fixed = TRUE
+#                           ),
+#                           pattern = ".",
+#                           replace = "",
+#                           fixed = TRUE
+#                         ),
+#                         pattern = "–",
+#                         replace = "",
+#                         fixed = TRUE
+#                       ),
+#                       pattern = ":",
+#                       replace = "",
+#                       fixed = TRUE
+#                     ),
+#                     pattern = "(",
+#                     replace = "",
+#                     fixed = TRUE
+#                   ),
+#                   pattern = ")",
+#                   replace = "",
+#                   fixed = TRUE
+#                 ),
+#                 pattern = ";",
+#                 replace = "",
+#                 fixed = TRUE
+#               ),
+#               pattern = "+",
+#               replace = "",
+#               fixed = "TRUE"
+#             ),
+#             pattern = "_",
+#             replace = "",
+#             fixed = TRUE
+#           )
+#         )
+#       }
+#     )
+#   )
 
 # enumerate distinct data types
 fileListTable$"Data File Name" <- strtrim(fileListTable$"Data File Name", 128)
@@ -272,6 +273,8 @@ downloadErrors = dplyr::tibble(
  )
 
 #change this line for testing
+# REFACTOR CHANGE - TESTING ON SMALL SET
+# for (i in i:2) {
 for (i in i:length(dataTypes)) {
   # get the name of the data type
   currDataType = dataTypes[i]
@@ -452,18 +455,19 @@ for (i in i:length(dataTypes)) {
     # create the table in SQL
     SqlTools::dbSendUpdate(cn, createTableQuery)
 
-    if (currDataType == "AUX") {
-      currOutputFileName = "/NHANES/Data/AUXtry"
-      write.table(
-      m,
-      file = currOutputFileName,
-      sep = "\t",
-      na = "",
-      row.names = FALSE,
-      col.names = FALSE,
-      quote = FALSE
-    )
-    }
+    # REFACTOR CHANGE - NO ISSUE WITH AUX ?
+    # if (currDataType == "AUX") {
+    #   currOutputFileName = "/NHANES/Data/AUXtry"
+    #   write.table(
+    #   m,
+    #   file = currOutputFileName,
+    #   sep = "\t",
+    #   na = "",
+    #   row.names = FALSE,
+    #   col.names = FALSE,
+    #   quote = FALSE
+    # )
+    # }
 
     # run bulk insert
     insertStatement = paste(sep="",
