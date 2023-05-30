@@ -118,6 +118,7 @@ RUN apt-get update \
 		libharfbuzz-dev \
 		libfribidi-dev \
 		cmake \
+		qpdf \
 	&& rm -rf /var/lib/apt/lists/*
 
 
