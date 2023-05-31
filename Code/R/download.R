@@ -91,7 +91,7 @@ fileListTable$'Data File'<- gsub('([A-z]+) .*', '\\1', as.character(fileListTabl
 fileListTable$'Data File' <- paste0(fileListTable$'Data File', ".XPT")
 fileListTable$'Data File'<-gsub(" Data","",as.character(fileListTable$'Data File'))
 
-excludedTables <- read_csv("NHANES/excludedtables.txt")
+excludedTables <- read_csv("/NHANES/excludedtables.txt")
 
 if !(opt$include-exclusions) {
     fileListTable <- fileListTable[!grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File'),]
