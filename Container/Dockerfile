@@ -242,6 +242,7 @@ RUN Rscript -e "remotes::install_cran('glmpath')"
 RUN Rscript -e "remotes::install_cran('testthat')"
 RUN Rscript -e "remotes::install_cran('DBI')"
 RUN Rscript -e "remotes::install_cran('odbc')"
+RUN Rscript -e "remotes::install_cran('readr')"
 
 # -- vanilla because there is a bug that causes the R intro / preamble text to get pushed into the compiler
 RUN Rscript --vanilla -e "remotes::install_cran('lme4', repos='"$R_REPOSITORY"')"
