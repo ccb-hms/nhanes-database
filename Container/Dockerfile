@@ -347,4 +347,6 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 RUN Rscript -e "remotes::install_version('nhanesA', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.7.1')"
 RUN Rscript -e "remotes::install_version('DT', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.26')"
 
+WORKDIR /NHANES
+
 CMD ["/startup/startup.sh"]
