@@ -19,6 +19,7 @@
 
 library(glue)
 library(stringr)
+library(readr)
 
 optionList = list(
   optparse::make_option(c("--container-build"), type="logical", default=FALSE, 
