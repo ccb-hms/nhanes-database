@@ -22,19 +22,15 @@ library(stringr)
 
 optionList = list(
   optparse::make_option(c("--container-build"), type="logical", default=FALSE, 
-                        help="is this script running inside of a container build process", metavar="logical")
+                        help="is this script running inside of a container build process", metavar="logical"),
+            make_option(c("--include-exclusions"), type="logical", default=FALSE, 
+                        help="whether or not to exclude the tables in Code/R/excludedtables.txt"),
 ); 
 
 optParser = optparse::OptionParser(option_list=optionList);
 opt = optparse::parse_args(optParser);
 
-EPICONDUCTOR_CONTAINER_VERSION  <- Sys.getenv("EPICONDUCTOR_CONTAINER_VERSION")
-COLLECTION_DATE <- Sys.getenv("COLLECTION_DATE")
-
-print(EPICONDUCTOR_CONTAINER_VERSION)
-print(COLLECTION_DATE)
-
-# this varaible is used below to determine how to handle errors.
+# this variable is used below to determine how to handle errors.
 # if running in a container build process, any errors encountered
 # in the processing of the files should cause R to return non-zero
 # status to the OS, causing the container build to fail.
@@ -72,50 +68,34 @@ htmlObj = xml2::read_html(paste(collapse="\n", htmlFileList[htmlTableStartLine :
 
 fileListTable = dplyr::`%>%`(htmlObj, rvest::html_table())[[1]]
 
-# Add Data File Name column, populate with Data File Names
+# Create a new column 'Data File Name' populated with each file name from the 'Doc File' column without ' Doc'. eg. 'ACQ_D Doc' -> 'ACQ_D'
 fileListTable$'Data File Name' <- gsub(" Doc","",as.character(fileListTable$'Doc File'))
 
-# Replace URLS with the incorrect years in their url
+# Some years in the year column do not match up with the year value in the url. eg. 'SSHCV' year 
+# column shows '2007-2012' but the url is https://wwwn.cdc.gov/Nchs/Nhanes/2007-2008/SSHCV_E.XPT.
+# lines 75-78 correct where this occurs in the table
 fileListTable$Years[fileListTable$Years == "1988-2020"] <- '1999-2000'
 fileListTable$Years[fileListTable$Years == "2007-2012"] <- '2007-2008'
 fileListTable$Years[fileListTable$Years == "1999-2004"] <- '1999-2000'
 fileListTable$Years[fileListTable$Years == "1999-2020"] <- '1999-2000'
 
-# Replace Doc File Column with the correct url
+# Replace the hyperlink in the Doc File column with the full url
 fileListTable$'Doc File' <- glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Doc File'}.htm")
 fileListTable$'Doc File'<-gsub(" Doc","",as.character(fileListTable$'Doc File'))
 
-# Replace Data File Column with the correct url
+# Replace the hyperlink in the Data File column with the full url
 fileListTable$'Data File' <- glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Data File'}.XPT")
 fileListTable$'Data File'<- gsub('([A-z]+) .*', '\\1', as.character(fileListTable$'Data File'))
 fileListTable$'Data File' <- paste0(fileListTable$'Data File', ".XPT")
 fileListTable$'Data File'<-gsub(" Data","",as.character(fileListTable$'Data File'))
 
-# Ignore rows which being with the prefix P_, these are the "pandemic" 2017 -- 2020 summary files
-fileListTable <- fileListTable[!grepl(pattern = "^P_", fileListTable$'Data File Name'),]
+excludedTables <- read_csv("Code/R/excludedtables.txt")
 
-# Remove the PAHS_H File specifically, the other PAHS files are OK.
-fileListTable <- fileListTable[!grepl("PAHS_H", fileListTable$'Data File Name'),]  
-
-# Skip the data types and URLs that cause issues
-fileListTable <- fileListTable[!grepl("https://wwwn.cdc.govNA", fileListTable$'Data File'),]  # invalid URL
-fileListTable <- fileListTable[!grepl("https://wwwn.cdc.gov/Nchs/Nhanes/Dxa/Dxa.aspx", fileListTable$'Data File'),]  # invalid URL
-fileListTable <- fileListTable[!grepl("PAXMIN", fileListTable$'Data File Name'),]       # large files take a long time to download, not likely used in most cases
-fileListTable <- fileListTable[!grepl("All Years", fileListTable$'Data File Name'),]       # large files take a long time to download, not likely used in most cases
-fileListTable <- fileListTable[!grepl("PAX80", fileListTable$'Data File Name'),]        # only available by FTP
-fileListTable <- fileListTable[!grepl("VID", fileListTable$'Data File Name'),]          # Vitamin D data is broken and redirects to HTML instead of SAS data file
-fileListTable <- fileListTable[!grepl("OMP", fileListTable$'Data File Name'),]          # redirect to an ASP page
-fileListTable <- fileListTable[!grepl("PAXLUX", fileListTable$'Data File Name'),]       # broken links
-fileListTable <- fileListTable[!grepl("ALQYTH", fileListTable$'Data File Name'),]       # broken links, not supposed to be available for download anyway
-fileListTable <- fileListTable[!grepl("SSCT", fileListTable$'Data File Name'),]         # broken links
-fileListTable <- fileListTable[!grepl("CHLMDA", fileListTable$'Data File Name'),]       # not publicly available
-fileListTable <- fileListTable[!grepl("CHLA", fileListTable$'Data File Name'),]         # not publicly available
-fileListTable <- fileListTable[!grepl("CHLM", fileListTable$'Data File Name'),]         # not publicly available
-fileListTable <- fileListTable[!grepl("LAB05", fileListTable$'Data File Name'),]        # not publicly available
-fileListTable <- fileListTable[!grepl("L05", fileListTable$'Data File Name'),]          # not publicly available
-fileListTable <- fileListTable[!grepl("PAXRAW", fileListTable$'Data File Name'),]       # not publicly available
-fileListTable <- fileListTable[!grepl("SPXRAW", fileListTable$'Data File Name'),]       # not publicly available
-fileListTable <- fileListTable[!grepl("PAXMIN", fileListTable$'Data File Name'),]       # not publicly available
+if !(opt$include-exclusions) {
+    for(i in 1:nrow(excludedTables)){
+      fileListTable <- fileListTable[!grepl(excludedTables$ExcludedTables[i], fileListTable$'Data File'),]
+      }
+}
 
 # enumerate distinct data types
 fileListTable$"Data File Name" <- strtrim(fileListTable$"Data File Name", 128)
@@ -154,10 +134,12 @@ cn = MsSqlTools::connectMsSqlSqlLogin(
 # 12G file 
 #--------------------------------------------------------------------------------------------------------
 
-# create landing zone for the raw data, set recovery mode to simple
-SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")
-SqlTools::dbSendUpdate(cn, "ALTER DATABASE [NhanesLandingZone] SET RECOVERY SIMPLE")
-SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
+
+if !(opt$include-exclusions) {
+  # create landing zone for the raw data, set recovery mode to simple
+  SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")
+  SqlTools::dbSendUpdate(cn, "ALTER DATABASE [NhanesLandingZone] SET RECOVERY SIMPLE")
+  SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")} else {}
 
 # prevent scientific notation
 options(scipen = 15)
@@ -179,9 +161,6 @@ downloadErrors = dplyr::tibble(
   Error=character()
  )
 
-#change this line for testing
-# REFACTOR CHANGE - TESTING ON SMALL SET
-# for (i in i:2) {
 for (i in i:length(dataTypes)) {
   # get the name of the data type
   currDataType = dataTypes[i]
@@ -394,8 +373,9 @@ createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VAR
 # change DOUBLE to float
 createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
 
+if !(opt$include-exclusions) {
 # create the table in SQL
-SqlTools::dbSendUpdate(cn, createTableQuery)
+SqlTools::dbSendUpdate(cn, createTableQuery)}
 
 # generate file name for temporary output
 currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
@@ -430,8 +410,9 @@ SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
+if !(opt$include-exclusions) {
 # create a table to hold records of the failed file downloads
-SqlTools::dbSendUpdate(cn, "CREATE TABLE DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")
+SqlTools::dbSendUpdate(cn, "CREATE TABLE DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
 
 # generate file name for temporary output
 currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")

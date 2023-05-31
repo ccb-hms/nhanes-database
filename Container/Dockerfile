@@ -294,6 +294,10 @@ RUN gdebi --non-interactive rstudio-server-2022.07.2-576-amd64.deb
 # Copy RStudio Config
 COPY Container/rserver.conf /etc/rstudio/rserver.conf
 
+# Declare which version of the container this is, and make it available to the container and all users in Rstudio
+ENV EPICONDUCTOR_CONTAINER_VERSION 1.0.2
+ENV COLLECTION_DATE 05-31-23
+
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
 RUN echo "COLLECTION_DATE=$COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
 
