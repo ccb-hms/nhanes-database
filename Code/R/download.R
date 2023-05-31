@@ -23,7 +23,7 @@ library(stringr)
 optionList = list(
   optparse::make_option(c("--container-build"), type="logical", default=FALSE, 
                         help="is this script running inside of a container build process", metavar="logical"),
-            make_option(c("--include-exclusions"), type="logical", default=FALSE, 
+  optparse::make_option(c("--include-exclusions"), type="logical", default=FALSE, 
                         help="whether or not to exclude the tables in Code/R/excludedtables.txt"),
 ); 
 
