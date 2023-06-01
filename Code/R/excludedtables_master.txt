@@ -1,0 +1,11 @@
+ExcludedTables
+PAXMIN
+All Years
+SPXRAW
+PAXRAW
+P_
+CHLMDA
+CHLA
+CHLM
+LAB05
+L05

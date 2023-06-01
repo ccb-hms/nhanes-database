@@ -163,293 +163,299 @@ downloadErrors = dplyr::tibble(
   FileUrl=character(), 
   Error=character()
  )
+if (length(dataTypes)>0){
+  for (i in i:length(dataTypes)) {
+    # get the name of the data type
+    currDataType = dataTypes[i]
 
-for (i in i:length(dataTypes)) {
-  # get the name of the data type
-  currDataType = dataTypes[i]
+    # find all rows with URLs that should be relevant to the current data type
+    rowsForCurrDataType = which(fileListTable[,"ScrubbedDataType"] == currDataType)
 
-  print(currDataType)
+    # assemble a list containing all of the subtables for this data type
+    dfList = list()
 
-  # find all rows with URLs that should be relevant to the current data type
-  rowsForCurrDataType = which(fileListTable[,"ScrubbedDataType"] == currDataType)
+    # pull all of the SAS files for this data type
+    for (currRow in rowsForCurrDataType) {
 
-  # assemble a list containing all of the subtables for this data type
-  dfList = list()
+      # get the URL for the SAS file pointed to by the current row
+      currFileUrl = fileListTable[currRow, "Data File"]
 
-  # pull all of the SAS files for this data type
-  for (currRow in rowsForCurrDataType) {
+      # get the date range for this table
+      currYears = fileListTable[currRow, "Years"]
 
-    # get the URL for the SAS file pointed to by the current row
-    currFileUrl = fileListTable[currRow, "Data File"]
+      # split the URL on '/' to extract the file name
+      urlSplit = strsplit(x = currFileUrl, split = "/", fixed = TRUE)[[1]]
+      fileName  = urlSplit[length(urlSplit)]
 
-    # get the date range for this table
-    currYears = fileListTable[currRow, "Years"]
+      #TODO move these to the exlusions group above^^^
+      cat("reading ", currFileUrl, "\n")
 
-    # split the URL on '/' to extract the file name
-    urlSplit = strsplit(x = currFileUrl, split = "/", fixed = TRUE)[[1]]
-    fileName  = urlSplit[length(urlSplit)]
-
-    #TODO move these to the exlusions group above^^^
-    cat("reading ", currFileUrl, "\n")
-
-    # attempt to download each file and log errors
-    result = tryCatch({
-      currTemp = tempfile()
-      utils::download.file(
-        url = currFileUrl, 
-        destfile = currTemp
-      )
-      z = haven::read_xpt(currTemp)
-      file.remove(currTemp)
-      z
-    }, warning = function(w) {
-      downloadErrors <<- dplyr::bind_rows(
-        downloadErrors, 
-        dplyr::bind_cols(
-          "DataType" = currDataType, 
-          "FileUrl" = currFileUrl,
-          "Error" = "warning"
+      # attempt to download each file and log errors
+      result = tryCatch({
+        currTemp = tempfile()
+        utils::download.file(
+          url = currFileUrl, 
+          destfile = currTemp
         )
-      )
-      return("warning")
-    }, error = function(e) {
-      downloadErrors <<- dplyr::bind_rows(
-        downloadErrors, 
-        dplyr::bind_cols(
-          "DataType" = currDataType, 
-          "FileUrl" = currFileUrl,
-          "Error" = "error"
+        z = haven::read_xpt(currTemp)
+        file.remove(currTemp)
+        z
+      }, warning = function(w) {
+        downloadErrors <<- dplyr::bind_rows(
+          downloadErrors, 
+          dplyr::bind_cols(
+            "DataType" = currDataType, 
+            "FileUrl" = currFileUrl,
+            "Error" = "warning"
+          )
         )
-      )
-      return("error")
-    })
+        return("warning")
+      }, error = function(e) {
+        downloadErrors <<- dplyr::bind_rows(
+          downloadErrors, 
+          dplyr::bind_cols(
+            "DataType" = currDataType, 
+            "FileUrl" = currFileUrl,
+            "Error" = "error"
+          )
+        )
+        return("error")
+      })
 
-    if (result == "warning" || result == "error") {
+      if (result == "warning" || result == "error") {
+        next
+      }
+
+      # save the survey years in the demographics table
+      if (currDataType == "DEMO") {
+        years = dplyr::tibble("years" = rep(x=currYears, times=nrow(result)))
+        result = dplyr::bind_cols(result, years)
+      }
+
+      # append a column containing the URL from which the original data was pulled
+      result = dplyr::bind_cols(
+        result, 
+        dplyr::tibble("DownloadUrl" = rep(x=currFileUrl, times=nrow(result)))
+      )
+
+      # append a column containing the questionnaire abbreviation
+      result = dplyr::bind_cols(
+        result, 
+        dplyr::tibble("Questionnaire" = rep(x=gsub(pattern="\\.XPT", replace="", fixed=FALSE, ignore.case=TRUE, fileName), times=nrow(result)))
+      )
+
+      beginYear = as.numeric(strsplit(x=currYears, split="-")[[1]][1])
+      endYear = as.numeric(strsplit(x=currYears, split="-")[[1]][2])
+
+      # save mapping from questionnaire to variables
+      questionnaireVariables =
+        dplyr::bind_rows(
+          questionnaireVariables, 
+          dplyr::bind_cols(
+            "Questionnaire" = 
+              rep(
+                dplyr::pull(result[1, "Questionnaire"]), 
+                times = ncol(result)
+              ), 
+            "Variable" = colnames(result),
+            "BeginYear" = rep(beginYear, times = ncol(result)),
+            "EndYear" = rep(endYear, times = ncol(result)),
+            "TableName" = rep(currDataType, times = ncol(result))
+          )
+        )
+
+      dfList[[length(dfList) + 1]] = result
+      rm(result)
+      gc()
+
+      cat("done reading ", currFileUrl, "\n")
+    }
+
+    # fix inconsistent types in PSA age variable
+    # there are actually two versions of the age variable, 'KID221' and KIQ221
+    # not clear whether one or the other is supposed to be double / char from
+    # the NHANES documentation
+    if (currDataType == "PSA") {
+      for (j in 1:length(dfList)) {
+        if ("KID221" %in% colnames(dfList[[j]])) {
+          dfList[[j]][,"KID221"] = as.character(dfList[[j]][,"KID221"][[1]])
+        }
+      }
+    }
+
+    ## if we were unable to pull any files for this data type, then move on
+    if (length(dfList) == 0) {
       next
     }
 
-    # save the survey years in the demographics table
-    if (currDataType == "DEMO") {
-      years = dplyr::tibble("years" = rep(x=currYears, times=nrow(result)))
-      result = dplyr::bind_cols(result, years)
-    }
-
-    # append a column containing the URL from which the original data was pulled
-    result = dplyr::bind_cols(
-      result, 
-      dplyr::tibble("DownloadUrl" = rep(x=currFileUrl, times=nrow(result)))
-    )
-
-    # append a column containing the questionnaire abbreviation
-    result = dplyr::bind_cols(
-      result, 
-      dplyr::tibble("Questionnaire" = rep(x=gsub(pattern="\\.XPT", replace="", fixed=FALSE, ignore.case=TRUE, fileName), times=nrow(result)))
-    )
-
-    beginYear = as.numeric(strsplit(x=currYears, split="-")[[1]][1])
-    endYear = as.numeric(strsplit(x=currYears, split="-")[[1]][2])
-
-    # save mapping from questionnaire to variables
-    questionnaireVariables =
-      dplyr::bind_rows(
-        questionnaireVariables, 
-        dplyr::bind_cols(
-          "Questionnaire" = 
-            rep(
-              dplyr::pull(result[1, "Questionnaire"]), 
-              times = ncol(result)
-            ), 
-          "Variable" = colnames(result),
-          "BeginYear" = rep(beginYear, times = ncol(result)),
-          "EndYear" = rep(endYear, times = ncol(result)),
-          "TableName" = rep(currDataType, times = ncol(result))
-        )
-      )
-
-    dfList[[length(dfList) + 1]] = result
-    rm(result)
+    # combine the rows from all of the SAS files for this data type
+    m = dplyr::bind_rows(dfList)
+    rm(dfList)
     gc()
 
-    cat("done reading ", currFileUrl, "\n")
-  }
+    # if we were able to read a table for this data type
+    if (nrow(m) > 0) {
 
-  # fix inconsistent types in PSA age variable
-  # there are actually two versions of the age variable, 'KID221' and KIQ221
-  # not clear whether one or the other is supposed to be double / char from
-  # the NHANES documentation
-  if (currDataType == "PSA") {
-    for (j in 1:length(dfList)) {
-      if ("KID221" %in% colnames(dfList[[j]])) {
-        dfList[[j]][,"KID221"] = as.character(dfList[[j]][,"KID221"][[1]])
+      # get a file system location to save the table
+      currOutputFileName = paste(sep = "/", outputDirectory, currDataType)
+
+      # get data types for each column in our current table
+      columnTypes = sapply(m, class)
+
+      # identify columns that contain character data
+      ixCharacterColumns = which(columnTypes == "character")
+
+      # if we have any character columns
+      if (length(ixCharacterColumns) > 0) {
+
+        # iterate over the character columns
+        for (currCharColumn in ixCharacterColumns) {
+
+          # fix any embedded line endings
+          m[,currCharColumn] = gsub(pattern = "[\r\n]", replacement = "", x = dplyr::pull(m[,currCharColumn]))
+        }
+      }
+
+      # write the table to file
+      write.table(
+        m,
+        file = currOutputFileName,
+        sep = "\t",
+        na = "",
+        row.names = FALSE,
+        col.names = FALSE,
+        quote = FALSE
+      )
+
+      # generate SQL table definitions from column types in tibbles
+      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), currDataType, m)
+
+      # change TEXT to VARCHAR(256)
+      createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
+
+      # change DOUBLE to float
+      createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+
+      # we know that SEQN should always be an INT
+      createTableQuery = gsub(createTableQuery, pattern = "\"SEQN\" float", replace = "\"SEQN\" INT", fixed = TRUE) # nolint
+
+      # create the table in SQL
+      SqlTools::dbSendUpdate(cn, createTableQuery)
+
+      # run bulk insert
+      insertStatement = paste(sep="",
+                              "BULK INSERT ",
+                              currDataType,
+                              " FROM '",
+                              currOutputFileName,
+                              "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+      )
+
+      SqlTools::dbSendUpdate(cn, insertStatement)
+
+
+          # if we don't want to keep the derived text files, then delete to save disk space
+      if (!persistTextFiles) {
+        file.remove(currOutputFileName)
       }
     }
+
+    # keep memory as clean as possible
+    rm(m)
+    gc()
   }
-
-  ## if we were unable to pull any files for this data type, then move on
-  if (length(dfList) == 0) {
-    next
-  }
-
-  # combine the rows from all of the SAS files for this data type
-  m = dplyr::bind_rows(dfList)
-  rm(dfList)
-  gc()
-
-  # if we were able to read a table for this data type
-  if (nrow(m) > 0) {
-
-    # get a file system location to save the table
-    currOutputFileName = paste(sep = "/", outputDirectory, currDataType)
-
-    # get data types for each column in our current table
-    columnTypes = sapply(m, class)
-
-    # identify columns that contain character data
-    ixCharacterColumns = which(columnTypes == "character")
-
-    # if we have any character columns
-    if (length(ixCharacterColumns) > 0) {
-
-      # iterate over the character columns
-      for (currCharColumn in ixCharacterColumns) {
-
-        # fix any embedded line endings
-        m[,currCharColumn] = gsub(pattern = "[\r\n]", replacement = "", x = dplyr::pull(m[,currCharColumn]))
-      }
-    }
-
-    # write the table to file
-    write.table(
-      m,
-      file = currOutputFileName,
-      sep = "\t",
-      na = "",
-      row.names = FALSE,
-      col.names = FALSE,
-      quote = FALSE
-    )
-
-    # generate SQL table definitions from column types in tibbles
-    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), currDataType, m)
-
-    # change TEXT to VARCHAR(256)
-    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
-
-    # change DOUBLE to float
-    createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
-
-    # we know that SEQN should always be an INT
-    createTableQuery = gsub(createTableQuery, pattern = "\"SEQN\" float", replace = "\"SEQN\" INT", fixed = TRUE) # nolint
-
-    # create the table in SQL
-    SqlTools::dbSendUpdate(cn, createTableQuery)
-
-    # run bulk insert
-    insertStatement = paste(sep="",
-                            "BULK INSERT ",
-                            currDataType,
-                            " FROM '",
-                            currOutputFileName,
-                            "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-    )
-
-    SqlTools::dbSendUpdate(cn, insertStatement)
-
-
-        # if we don't want to keep the derived text files, then delete to save disk space
-    if (!persistTextFiles) {
-      file.remove(currOutputFileName)
-    }
-  }
-
-  # keep memory as clean as possible
-  rm(m)
-  gc()
 }
 
-# generate CREATE TABLE statement
-createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "QuestionnaireVariables", questionnaireVariables)
+  # generate CREATE TABLE statement
+  createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "QuestionnaireVariables", questionnaireVariables)
 
-# fix TEXT column types
-createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
+  # fix TEXT column types
+  createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
 
-# change DOUBLE to float
-createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+  # change DOUBLE to float
+  createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
 
-if (!opt[["include-exclusions"]]) {
-# create the table in SQL
-SqlTools::dbSendUpdate(cn, createTableQuery)}
+  if (!opt[["include-exclusions"]]) {
+  # create the table in SQL
+  SqlTools::dbSendUpdate(cn, createTableQuery)}
 
-# generate file name for temporary output
-currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
+  # generate file name for temporary output
+  currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
 
-# write questionnaireVariables table to disk
-write.table(
-  questionnaireVariables,
-  file = currOutputFileName,
-  sep = "\t",
-  na = "",
-  row.names = FALSE,
-  col.names = FALSE,
-  quote = FALSE
-)
+  if (file.exists(currOutputFileName)) {
+  #Delete file if it exists
+  file.remove(currOutputFileName)
+  }
 
-# issue BULK INSERT
-insertStatement = paste(sep="",
-                        "BULK INSERT ",
-                        "QuestionnaireVariables",
-                        " FROM '",
-                        currOutputFileName,
-                        "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-)
-SqlTools::dbSendUpdate(cn, insertStatement)
+  # write questionnaireVariables table to disk
+  write.table(
+    questionnaireVariables,
+    file = currOutputFileName,
+    sep = "\t",
+    na = "",
+    append=TRUE,
+    row.names = FALSE,
+    col.names = FALSE,
+    quote = FALSE
+  )
 
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+  # issue BULK INSERT
+  insertStatement = paste(sep="",
+                          "BULK INSERT ",
+                          "QuestionnaireVariables",
+                          " FROM '",
+                          currOutputFileName,
+                          "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+  )
+  SqlTools::dbSendUpdate(cn, insertStatement)
 
-# shrink transaction log
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+  # issue checkpoint
+  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+  # shrink transaction log
+  SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
-if (!opt[["include-exclusions"]]) {
-# create a table to hold records of the failed file downloads
-SqlTools::dbSendUpdate(cn, "CREATE TABLE DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
+  # issue checkpoint
+  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-# generate file name for temporary output
-currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
+  if (!opt[["include-exclusions"]]) {
+  # create a table to hold records of the failed file downloads
+  SqlTools::dbSendUpdate(cn, "CREATE TABLE DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
 
-# write failed file downloads table to disk
-write.table(
-  downloadErrors,
-  file = currOutputFileName,
-  sep = "\t",
-  na = "",
-  row.names = FALSE,
-  col.names = FALSE,
-  quote = FALSE
-)
+  # generate file name for temporary output
+  currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
 
-# issue BULK INSERT
-insertStatement = paste(sep="",
-                        "BULK INSERT ",
-                        "DownloadErrors",
-                        " FROM '",
-                        currOutputFileName,
-                        "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-)
+  # write failed file downloads table to disk
+  write.table(
+    downloadErrors,
+    file = currOutputFileName,
+    sep = "\t",
+    na = "",
+    append=TRUE,
+    row.names = FALSE,
+    col.names = FALSE,
+    quote = FALSE
+  )
 
-SqlTools::dbSendUpdate(cn, insertStatement)
+  # issue BULK INSERT
+  insertStatement = paste(sep="",
+                          "BULK INSERT ",
+                          "DownloadErrors",
+                          " FROM '",
+                          currOutputFileName,
+                          "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+  )
 
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+  SqlTools::dbSendUpdate(cn, insertStatement)
 
-# shrink transaction log
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+  # issue checkpoint
+  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+  # shrink transaction log
+  SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "SHUTDOWN")
+  # issue checkpoint
+  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
+  # issue checkpoint
+  SqlTools::dbSendUpdate(cn, "SHUTDOWN")
