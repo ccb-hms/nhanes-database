@@ -92,12 +92,16 @@ fileListTable$'Data File' <- paste0(fileListTable$'Data File', ".XPT")
 fileListTable$'Data File'<-gsub(" Data","",as.character(fileListTable$'Data File'))
 
 excludedTables <- read_csv("/NHANES/excludedtables.txt")
+print(nrow(excludedTables))
 
 if (!opt[["include-exclusions"]]) {
     fileListTable <- fileListTable[!grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File'),]
-
+    print("include-exclusions is OFF, length of fileListTable is")
+    print(nrow(excludedTables))
 } else{
     fileListTable <- fileListTable[grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File'),] 
+    print("include-exclusions is ON, length of fileListTable is")
+    print(nrow(excludedTables))
  }
 
 # enumerate distinct data types
