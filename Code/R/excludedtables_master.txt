@@ -1,6 +1,8 @@
 ExcludedTables
-PAXMIN
 All Years
+PAHS
+PAX80
+PAXLUX
 SPXRAW
 PAXRAW
 P_
@@ -9,3 +11,4 @@ CHLA
 CHLM
 LAB05
 L05
+PAXMIN
