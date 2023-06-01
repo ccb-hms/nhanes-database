@@ -382,11 +382,6 @@ if (length(dataTypes)>0){
   # generate file name for temporary output
   currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
 
-  if (file.exists(currOutputFileName)) {
-  #Delete file if it exists
-  file.remove(currOutputFileName)
-  }
-
   # write questionnaireVariables table to disk
   write.table(
     questionnaireVariables,
