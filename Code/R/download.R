@@ -93,7 +93,7 @@ fileListTable$'Data File'<-gsub(" Data","",as.character(fileListTable$'Data File
 
 excludedTables <- read_csv("/NHANES/excludedtables.txt")
 
-if (!opt$include-exclusions) {
+if (!opt[["include-exclusions"]]) {
     fileListTable <- fileListTable[!grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File'),]
 
 } else{
@@ -138,7 +138,7 @@ cn = MsSqlTools::connectMsSqlSqlLogin(
 #--------------------------------------------------------------------------------------------------------
 
 
-if (!opt$include-exclusions) {
+if (!opt[["include-exclusions"]]){
   # create landing zone for the raw data, set recovery mode to simple
   SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")
   SqlTools::dbSendUpdate(cn, "ALTER DATABASE [NhanesLandingZone] SET RECOVERY SIMPLE")
@@ -376,7 +376,7 @@ createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VAR
 # change DOUBLE to float
 createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
 
-if (!opt$include-exclusions) {
+if (!opt[["include-exclusions"]]) {
 # create the table in SQL
 SqlTools::dbSendUpdate(cn, createTableQuery)}
 
@@ -413,7 +413,7 @@ SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-if (!opt$include-exclusions) {
+if (!opt[["include-exclusions"]]) {
 # create a table to hold records of the failed file downloads
 SqlTools::dbSendUpdate(cn, "CREATE TABLE DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
 
