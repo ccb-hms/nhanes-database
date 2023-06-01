@@ -95,13 +95,9 @@ excludedTables <- read_csv("/NHANES/excludedtables.txt")
 print(nrow(excludedTables))
 
 if (!opt[["include-exclusions"]]) {
-    fileListTable <- fileListTable[!grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File'),]
-    print("include-exclusions is OFF, length of fileListTable is")
-    print(nrow(fileListTable))
+    fileListTable <- fileListTable[!grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File Name'),]
 } else{
-    fileListTable <- fileListTable[grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File'),] 
-    print("include-exclusions is ON, length of fileListTable is")
-    print(nrow(fileListTable))
+    fileListTable <- fileListTable[grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File Name'),] 
  }
 
 # enumerate distinct data types
@@ -144,9 +140,10 @@ cn = MsSqlTools::connectMsSqlSqlLogin(
 
 if (!opt[["include-exclusions"]]){
   # create landing zone for the raw data, set recovery mode to simple
-  SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")
+  SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")}
+
   SqlTools::dbSendUpdate(cn, "ALTER DATABASE [NhanesLandingZone] SET RECOVERY SIMPLE")
-  SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")}
+  SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
 
 # prevent scientific notation
 options(scipen = 15)
