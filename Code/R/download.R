@@ -274,7 +274,6 @@ if (length(dataTypes)>0){
             "Variable" = colnames(result),
             "TableName" = rep(currDataType, times = ncol(result))
           )
-        )
 
       dfList[[length(dfList) + 1]] = result
       rm(result)
