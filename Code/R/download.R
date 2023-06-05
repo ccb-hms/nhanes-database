@@ -152,10 +152,7 @@ options(scipen = 15)
 
 # track which variables appear in each questionnaire
 questionnaireVariables = dplyr::tibble(
-  Questionnaire=character(), 
   Variable=character(), 
-  BeginYear=numeric(), 
-  EndYear=numeric(), 
   TableName=character()
 )
 
