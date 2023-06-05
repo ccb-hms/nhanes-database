@@ -142,6 +142,8 @@ if (!opt[["include-exclusions"]]){
   # create landing zone for the raw data, set recovery mode to simple
   SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")}
 
+#todo: create schema originalcoding
+
   SqlTools::dbSendUpdate(cn, "ALTER DATABASE [NhanesLandingZone] SET RECOVERY SIMPLE")
   SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
 
@@ -233,34 +235,43 @@ if (length(dataTypes)>0){
         result = dplyr::bind_cols(result, years)
       }
 
-      # append a column containing the URL from which the original data was pulled
-      result = dplyr::bind_cols(
-        result, 
-        dplyr::tibble("DownloadUrl" = rep(x=currFileUrl, times=nrow(result)))
-      )
+      # # append a column containing the URL from which the original data was pulled
+      # result = dplyr::bind_cols(
+      #   result, 
+      #   dplyr::tibble("DownloadUrl" = rep(x=currFileUrl, times=nrow(result)))
+      # )
 
-      # append a column containing the questionnaire abbreviation
-      result = dplyr::bind_cols(
-        result, 
-        dplyr::tibble("Questionnaire" = rep(x=gsub(pattern="\\.XPT", replace="", fixed=FALSE, ignore.case=TRUE, fileName), times=nrow(result)))
-      )
+      # # append a column containing the questionnaire abbreviation
+      # result = dplyr::bind_cols(
+      #   result, 
+      #   dplyr::tibble("Questionnaire" = rep(x=gsub(pattern="\\.XPT", replace="", fixed=FALSE, ignore.case=TRUE, fileName), times=nrow(result)))
+      # )
 
       beginYear = as.numeric(strsplit(x=currYears, split="-")[[1]][1])
       endYear = as.numeric(strsplit(x=currYears, split="-")[[1]][2])
 
       # save mapping from questionnaire to variables
+      # OLD mapping, with questionnaire, beginyear, endyear, and downloadurl column included
+      # questionnaireVariables =
+      #   dplyr::bind_rows(
+      #     questionnaireVariables, 
+      #     dplyr::bind_cols(
+      #       "Questionnaire" = 
+      #         rep(
+      #           dplyr::pull(result[1, "Questionnaire"]), 
+      #           times = ncol(result)
+      #         ), 
+      #       "Variable" = colnames(result),
+      #       "BeginYear" = rep(beginYear, times = ncol(result)),
+      #       "EndYear" = rep(endYear, times = ncol(result)),
+      #       "TableName" = rep(currDataType, times = ncol(result))
+      #     )
+      #   )      
+
       questionnaireVariables =
         dplyr::bind_rows(
           questionnaireVariables, 
-          dplyr::bind_cols(
-            "Questionnaire" = 
-              rep(
-                dplyr::pull(result[1, "Questionnaire"]), 
-                times = ncol(result)
-              ), 
             "Variable" = colnames(result),
-            "BeginYear" = rep(beginYear, times = ncol(result)),
-            "EndYear" = rep(endYear, times = ncol(result)),
             "TableName" = rep(currDataType, times = ncol(result))
           )
         )
