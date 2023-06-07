@@ -44,6 +44,14 @@ sqlUserName = "sa"
 sqlPassword = "yourStrong(!)Password"
 sqlDefaultDb = "master"
 
+# connect to SQL
+cn = MsSqlTools::connectMsSqlSqlLogin(
+  server = sqlHost, 
+  user = sqlUserName, 
+  password = sqlPassword, 
+  database = sqlDefaultDb
+)
+
 # control persistence of downloaded and extracted text files
 persistTextFiles = FALSE
 
@@ -97,7 +105,7 @@ print(nrow(excludedTables))
 if (!opt[["include-exclusions"]]) {
     fileListTable <- fileListTable[!grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File Name'),]
 } else{
-    fileListTable <- fileListTable[grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File Name'),] 
+    fileListTable <- fileListTable[grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File Name'),]  
  }
 
 # enumerate distinct data types
@@ -117,14 +125,6 @@ names(dataTypes) = uniqueUpper
 cnames = colnames(fileListTable)
 fileListTable = cbind(fileListTable,  dataTypes[toupper(fileListTable$"Data File Name")])
 colnames(fileListTable) = c(cnames, "ScrubbedDataType")
-
-# connect to SQL
-cn = MsSqlTools::connectMsSqlSqlLogin(
-  server = sqlHost, 
-  user = sqlUserName, 
-  password = sqlPassword, 
-  database = sqlDefaultDb
-)
 
 #--------------------------------------------------------------------------------------------------------
 # performance notes for large XPTs:
@@ -163,8 +163,9 @@ downloadErrors = dplyr::tibble(
   FileUrl=character(), 
   Error=character()
  )
-if (length(dataTypes)>0){
-  for (i in i:length(dataTypes)) {
+
+# for (i in i:length(dataTypes)) {
+for (i in i:3) {
     # get the name of the data type
     currDataType = dataTypes[i]
 
@@ -232,45 +233,14 @@ if (length(dataTypes)>0){
         result = dplyr::bind_cols(result, years)
       }
 
-      # # append a column containing the URL from which the original data was pulled
-      # result = dplyr::bind_cols(
-      #   result, 
-      #   dplyr::tibble("DownloadUrl" = rep(x=currFileUrl, times=nrow(result)))
-      # )
-
-      # # append a column containing the questionnaire abbreviation
-      # result = dplyr::bind_cols(
-      #   result, 
-      #   dplyr::tibble("Questionnaire" = rep(x=gsub(pattern="\\.XPT", replace="", fixed=FALSE, ignore.case=TRUE, fileName), times=nrow(result)))
-      # )
-
-      beginYear = as.numeric(strsplit(x=currYears, split="-")[[1]][1])
-      endYear = as.numeric(strsplit(x=currYears, split="-")[[1]][2])
-
-      # save mapping from questionnaire to variables
-      # OLD mapping, with questionnaire, beginyear, endyear, and downloadurl column included
-      # questionnaireVariables =
-      #   dplyr::bind_rows(
-      #     questionnaireVariables, 
-      #     dplyr::bind_cols(
-      #       "Questionnaire" = 
-      #         rep(
-      #           dplyr::pull(result[1, "Questionnaire"]), 
-      #           times = ncol(result)
-      #         ), 
-      #       "Variable" = colnames(result),
-      #       "BeginYear" = rep(beginYear, times = ncol(result)),
-      #       "EndYear" = rep(endYear, times = ncol(result)),
-      #       "TableName" = rep(currDataType, times = ncol(result))
-      #     )
-      #   )      
-
       questionnaireVariables =
         dplyr::bind_rows(
           questionnaireVariables, 
+          dplyr::bind_cols( 
             "Variable" = colnames(result),
             "TableName" = rep(currDataType, times = ncol(result))
           )
+        )  
 
       dfList[[length(dfList) + 1]] = result
       rm(result)
@@ -371,46 +341,70 @@ if (length(dataTypes)>0){
     # keep memory as clean as possible
     rm(m)
     gc()
-  }
 }
 
-  # generate CREATE TABLE statement
-  createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "QuestionnaireVariables", questionnaireVariables)
+if (!opt[["include-exclusions"]]) {
+      # generate CREATE TABLE statement
+      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "QuestionnaireVariables", questionnaireVariables)
 
-  # fix TEXT column types
-  createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
+      # fix TEXT column types
+      createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
 
-  # change DOUBLE to float
-  createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+      # change DOUBLE to float
+      createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
 
-  if (!opt[["include-exclusions"]]) {
-  # create the table in SQL
-  SqlTools::dbSendUpdate(cn, createTableQuery)}
+      # create the table in SQL
+      SqlTools::dbSendUpdate(cn, createTableQuery)
+      
+      # generate file name for temporary output
+      currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
 
-  # generate file name for temporary output
-  currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
+      # write questionnaireVariables table to disk
+      write.table(
+        questionnaireVariables,
+        file = currOutputFileName,
+        sep = "\t",
+        na = "",
+        append=TRUE,
+        row.names = FALSE,
+        col.names = FALSE,
+        quote = FALSE
+      )
+        # issue BULK INSERT
+      insertStatement = paste(sep="",
+                              "BULK INSERT ",
+                              "QuestionnaireVariables",
+                              " FROM '",
+                              currOutputFileName,
+                              "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+      )
+      SqlTools::dbSendUpdate(cn, insertStatement)
 
-  # write questionnaireVariables table to disk
-  write.table(
-    questionnaireVariables,
-    file = currOutputFileName,
-    sep = "\t",
-    na = "",
-    append=TRUE,
-    row.names = FALSE,
-    col.names = FALSE,
-    quote = FALSE
-  )
+} else{
+      # generate file name for temporary output
+      currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
 
-  # issue BULK INSERT
-  insertStatement = paste(sep="",
-                          "BULK INSERT ",
-                          "QuestionnaireVariables",
-                          " FROM '",
-                          currOutputFileName,
-                          "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-  )
-  SqlTools::dbSendUpdate(cn, insertStatement)
+      # write questionnaireVariables table to disk
+      write.table(
+        questionnaireVariables,
+        file = currOutputFileName,
+        sep = "\t",
+        na = "",
+        append=TRUE,
+        row.names = FALSE,
+        col.names = FALSE,
+        quote = FALSE
+      )
+        # issue BULK INSERT
+      insertStatement = paste(sep="",
+                              "BULK INSERT ",
+                              "QuestionnaireVariables",
+                              " FROM '",
+                              currOutputFileName,
+                              "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+      )
+      SqlTools::dbSendUpdate(cn, insertStatement)
+ }
 
   # issue checkpoint
   SqlTools::dbSendUpdate(cn, "CHECKPOINT")
