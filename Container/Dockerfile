@@ -178,7 +178,7 @@ ENV R_VERSION_BUGFIX 1
 ENV R_VERSION $R_VERSION_MAJOR.$R_VERSION_MINOR.$R_VERSION_BUGFIX
 ENV R_HOME=/usr/local/lib/R
 ENV EPICONDUCTOR_CONTAINER_VERSION testing
-ENV COLLECTION_DATE 2023-06-07
+ENV COLLECTION_DATE 05-31-23
 
 WORKDIR /tmp
 RUN wget https://cran.r-project.org/src/base/R-4/R-$R_VERSION.tar.gz
@@ -296,8 +296,8 @@ RUN gdebi --non-interactive rstudio-server-2022.07.2-576-amd64.deb
 COPY Container/rserver.conf /etc/rstudio/rserver.conf
 
 # Declare which version of the container this is, and make it available to the container and all users in Rstudio
-ENV EPICONDUCTOR_CONTAINER_VERSION testing
-ENV COLLECTION_DATE 2023-06-07
+ENV EPICONDUCTOR_CONTAINER_VERSION 1.0.2
+ENV COLLECTION_DATE 05-31-23
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
 RUN echo "COLLECTION_DATE=$COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
