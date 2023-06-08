@@ -178,7 +178,7 @@ ENV R_VERSION_BUGFIX 1
 ENV R_VERSION $R_VERSION_MAJOR.$R_VERSION_MINOR.$R_VERSION_BUGFIX
 ENV R_HOME=/usr/local/lib/R
 ENV EPICONDUCTOR_CONTAINER_VERSION testing
-ENV COLLECTION_DATE 05-31-23
+ENV COLLECTION_DATE 2023-06-08
 
 WORKDIR /tmp
 RUN wget https://cran.r-project.org/src/base/R-4/R-$R_VERSION.tar.gz
@@ -204,8 +204,8 @@ RUN echo 'options(bitmapType="cairo")' >> $R_HOME/etc/Rprofile.site
 
 # tell R to use wget (devtools::install_github aimed at HTTPS connections had problems with libcurl)
 RUN echo 'options("download.file.method" = "wget")' >> $R_HOME/etc/Rprofile.site
-RUN Rscript -e "install.packages(c('curl', 'httr'))"
-
+RUN Rscript -e "install.packages('curl', type='binary')"
+RUN Rscript -e "install.packages('httr', type='binary')"
 
 #------------------------------------------------------------------------------
 # Install basic R packages
@@ -296,8 +296,8 @@ RUN gdebi --non-interactive rstudio-server-2022.07.2-576-amd64.deb
 COPY Container/rserver.conf /etc/rstudio/rserver.conf
 
 # Declare which version of the container this is, and make it available to the container and all users in Rstudio
-ENV EPICONDUCTOR_CONTAINER_VERSION 1.0.2
-ENV COLLECTION_DATE 05-31-23
+ENV EPICONDUCTOR_CONTAINER_VERSION testing
+ENV COLLECTION_DATE 2023-06-08
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
 RUN echo "COLLECTION_DATE=$COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
@@ -327,26 +327,26 @@ RUN chmod -R 777 /NHANES/Data
 ARG ACCEPT_EULA=Y
 ARG SA_PASSWORD=yourStrong(!)Password
 
-# # run the download and database build
-# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awaiting server bootup" && sleep 15 && echo "lets try to logon"  && /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P ${SA_PASSWORD})' \
-# 	&& Rscript /NHANES/download.R --container-build=TRUE
+# run the download and database build
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awaiting server bootup" && sleep 15 && echo "lets try to logon"  && /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P ${SA_PASSWORD})' \
+	&& Rscript /NHANES/download.R --container-build=TRUE
 	
-# # # run the ETL process to load variable metadata
-# COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
-# COPY Code/R/createQuestionnaireViews.R /NHANES/createQuestionnaireViews.R
-# WORKDIR /tmp
-# RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
-# WORKDIR /tmp/NHANES-metadata
-# RUN git fetch --tags
-# RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
-# RUN git checkout $latestTag
+# # run the ETL process to load variable metadata
+COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
+COPY Code/R/createQuestionnaireViews.R /NHANES/createQuestionnaireViews.R
+WORKDIR /tmp
+RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
+WORKDIR /tmp/NHANES-metadata
+RUN git fetch --tags
+RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
+RUN git checkout $latestTag
 
-# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-# 	&& Rscript /NHANES/etlVariableCodebook.R
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/etlVariableCodebook.R
 
-# # install packages, which require newer version of rvest in conflict with the download / build script
-# RUN Rscript -e "remotes::install_version('nhanesA', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.7.1')"
-# RUN Rscript -e "remotes::install_version('DT', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.26')"
+# install packages, which require newer version of rvest in conflict with the download / build script
+RUN Rscript -e "remotes::install_version('nhanesA', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.7.1')"
+RUN Rscript -e "remotes::install_version('DT', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.26')"
 
 WORKDIR /NHANES
 

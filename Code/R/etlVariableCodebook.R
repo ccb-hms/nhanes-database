@@ -10,9 +10,9 @@ library(glue)
 library(stringr)
 
 # this is the location of the combined output file
-codebookFile = paste(sep = "/", getwd(), "metadata/nhanes_variables_codebooks.csv")
-tablesFile = paste(sep = "/", getwd(), "metadata/nhanes_tables.csv")
-variablesFile = paste(sep = "/", getwd(), "metadata/nhanes_variables.csv")
+codebookFile = paste(sep = "/", getwd(), "metadata/nhanes_variables_codebooks.tsv")
+tablesFile = paste(sep = "/", getwd(), "metadata/nhanes_tables.tsv")
+variablesFile = paste(sep = "/", getwd(), "metadata/nhanes_variables.tsv")
 ontologyMappings = paste(sep = "/", getwd(), "ontology-mappings/")
 ontologyTables = paste(sep = "/", getwd(), "ontology-tables/")
 
