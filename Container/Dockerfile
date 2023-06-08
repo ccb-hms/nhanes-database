@@ -192,7 +192,7 @@ WORKDIR /tmp
 RUN rm -r /tmp/R-$R_VERSION*
 
 # set CRAN repository snapshot for standard package installs
-ENV R_REPOSITORY=https://cran.microsoft.com/snapshot/2022-10-18
+ENV R_REPOSITORY=https://packagemanager.posit.co/cran/__linux__/focal/2022-10-18
 RUN echo 'options(repos = c(CRAN = "'$R_REPOSITORY'"))' >> $R_HOME/etc/Rprofile.site
 
 # enable multithreaded build for R packages
@@ -264,7 +264,7 @@ RUN Rscript -e "remotes::install_cran('optparse')"
 
 # need old version of rvest in order for the hack that parses URLs to work in the NHANES download script
 RUN Rscript -e "remove.packages('rvest')"
-RUN Rscript -e "remotes::install_cran('rvest', repos='https://cran.microsoft.com/snapshot/2021-01-29')"
+RUN Rscript -e "remotes::install_cran('rvest', repos='https://packagemanager.posit.co/cran/__linux__/focal/2021-01-29')"
 
 # allow modification of these locations so users can install R packages without warnings
 RUN chmod -R 777 /usr/local/lib/R/library
@@ -345,8 +345,8 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
 
 # install packages, which require newer version of rvest in conflict with the download / build script
-RUN Rscript -e "remotes::install_version('nhanesA', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.7.1')"
-RUN Rscript -e "remotes::install_version('DT', repos='https://cran.microsoft.com/snapshot/2022-11-06', upgrade=TRUE, version='0.26')"
+RUN Rscript -e "remotes::install_version('nhanesA', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.7.1')"
+RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
 
 WORKDIR /NHANES
 
