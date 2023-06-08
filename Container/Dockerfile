@@ -204,8 +204,8 @@ RUN echo 'options(bitmapType="cairo")' >> $R_HOME/etc/Rprofile.site
 
 # tell R to use wget (devtools::install_github aimed at HTTPS connections had problems with libcurl)
 RUN echo 'options("download.file.method" = "wget")' >> $R_HOME/etc/Rprofile.site
-RUN Rscript -e "install.packages('curl', type='binary')"
-RUN Rscript -e "install.packages('httr', type='binary')"
+RUN Rscript -e "install.packages('curl')"
+RUN Rscript -e "install.packages('httr')"
 
 #------------------------------------------------------------------------------
 # Install basic R packages
