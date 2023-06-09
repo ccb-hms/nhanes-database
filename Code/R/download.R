@@ -167,8 +167,9 @@ downloadErrors = dplyr::tibble(
   FileUrl=character(), 
   Error=character()
  )
-# for (i in i:length(dataTypes)) {
-for (i in i:10) {
+
+for (i in i:length(dataTypes)) {
+
     # get the name of the data type
     currDataType = dataTypes[i]
 
