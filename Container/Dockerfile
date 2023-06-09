@@ -177,8 +177,6 @@ ENV R_VERSION_MINOR 2
 ENV R_VERSION_BUGFIX 1
 ENV R_VERSION $R_VERSION_MAJOR.$R_VERSION_MINOR.$R_VERSION_BUGFIX
 ENV R_HOME=/usr/local/lib/R
-ENV EPICONDUCTOR_CONTAINER_VERSION testing
-ENV COLLECTION_DATE 2023-06-08
 
 WORKDIR /tmp
 RUN wget https://cran.r-project.org/src/base/R-4/R-$R_VERSION.tar.gz
@@ -295,13 +293,6 @@ RUN gdebi --non-interactive rstudio-server-2022.07.2-576-amd64.deb
 # Copy RStudio Config
 COPY Container/rserver.conf /etc/rstudio/rserver.conf
 
-# Declare which version of the container this is, and make it available to the container and all users in Rstudio
-ENV EPICONDUCTOR_CONTAINER_VERSION testing
-ENV COLLECTION_DATE 2023-06-08
-
-RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
-RUN echo "COLLECTION_DATE=$COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
-
 #------------------------------------------------------------------------------
 # Final odds and ends
 #------------------------------------------------------------------------------
@@ -361,5 +352,15 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/translateRawTables.R
 
 WORKDIR /NHANES
+
+# Declare which version of the container this is, and make it available inside the container 
+ENV EPICONDUCTOR_CONTAINER_VERSION testing
+ENV EPICONDUCTOR_COLLECTION_DATE 2023-06-09
+
+RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
+RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
+
+RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/environment
+RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/environment
 
 CMD ["/startup/startup.sh"]
