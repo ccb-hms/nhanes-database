@@ -73,19 +73,18 @@ AS
     DECLARE @TranslateStmt varchar(8000)
     SET @TranslateStmt = '
         SELECT 
-            T.*, 
-            V.ValueDescription 
+            T.SEQN,
+            T.Variable,
+            COALESCE(CAST(V.ValueDescription AS VARCHAR), CAST(T.Response AS VARCHAR)) AS ValueDescription
         INTO 
             ' + @TranslatedTempTableName + '
         FROM 
             ' + @UnpivotTempTableName + ' T 
-            INNER JOIN Metadata.VariableCodebook V ON 
+            LEFT OUTER JOIN Metadata.VariableCodebook V ON 
                 T.Variable = V.Variable 
                 AND CAST(T.Response AS VARCHAR) = CAST(V.CodeOrValue AS VARCHAR)
-        WHERE 
-            V.Questionnaire = ''' + @SourceTableName + '''
+                AND V.Questionnaire = ''' + @SourceTableName + '''        
     '
-
     -- PRINT @TranslateStmt
     EXEC (@TranslateStmt)
 
