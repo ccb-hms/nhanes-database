@@ -167,7 +167,8 @@ downloadErrors = dplyr::tibble(
   FileUrl=character(), 
   Error=character()
  )
-for (i in i:length(dataTypes)) {
+# for (i in i:length(dataTypes)) {
+for (i in i:10) {
     # get the name of the data type
     currDataType = dataTypes[i]
 
@@ -339,6 +340,8 @@ for (i in i:length(dataTypes)) {
       indexStatement = paste(sep="",
                               "CREATE CLUSTERED INDEX idxSeqn ON Raw.",
                               currDataType, " (SEQN) WITH (SORT_IN_TEMPDB=ON, ONLINE=OFF, DATA_COMPRESSION=PAGE)")
+                              
+      SqlTools::dbSendUpdate(cn, indexStatement)
 
       # if we don't want to keep the derived text files, then delete to save disk space
       if (!persistTextFiles) {
@@ -455,9 +458,6 @@ if (!opt[["include-exclusions"]]) {
   )
 
   SqlTools::dbSendUpdate(cn, insertStatement)
-
-  # issue checkpoint
-  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
   # shrink transaction log
   SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
