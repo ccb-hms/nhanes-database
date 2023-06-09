@@ -355,6 +355,11 @@ WORKDIR /NHANES
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/stageSprocs.R
 
+COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
+WORKDIR /NHANES
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/translateRawTables.R
+
 WORKDIR /NHANES
 
 CMD ["/startup/startup.sh"]
