@@ -121,7 +121,7 @@ AS
 
     -- create a clustered index on the destination table with compression
     DECLARE @IndexStmt varchar(8000)
-    SET @IndexStmt = 'CREATE CLUSTERED INDEX idxSeqn ON ' + @DestinationTableSchema + '.' + @DestinationTableName +' (SEQN) WITH (SORT_IN_TEMPDB=ON, ONLINE=OFF, DATA_COMPRESSION=PAGE)'
+    SET @IndexStmt = 'CREATE CLUSTERED COLUMNSTORE INDEX idxSeqn ON ' + @DestinationTableSchema + '.' + @DestinationTableName
 
     --EXEC('SELECT * FROM ' + @DestinationTableName)
 
