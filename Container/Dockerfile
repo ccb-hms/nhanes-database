@@ -331,7 +331,7 @@ ARG SA_PASSWORD=yourStrong(!)Password
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awaiting server bootup" && sleep 15 && echo "lets try to logon"  && /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P ${SA_PASSWORD})' \
 	&& Rscript /NHANES/download.R --container-build=TRUE
 	
-# # run the ETL process to load variable metadata
+# run the ETL process to load variable metadata
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
 COPY Code/R/createQuestionnaireViews.R /NHANES/createQuestionnaireViews.R
 WORKDIR /tmp
@@ -343,10 +343,17 @@ RUN git checkout $latestTag
 
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
-
+	
 # install packages, which require newer version of rvest in conflict with the download / build script
 RUN Rscript -e "remotes::install_version('nhanesA', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.7.1')"
 RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
+
+# translate the coded responses
+COPY Code/Sql/spTranslateTable.sql /NHANES/spTranslateTable.sql
+COPY Code/R/stageSprocs.R /NHANES/stageSprocs.R
+WORKDIR /NHANES
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/stageSprocs.R
 
 WORKDIR /NHANES
 

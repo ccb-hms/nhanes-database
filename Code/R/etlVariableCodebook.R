@@ -5,7 +5,6 @@
 #
 # run this from the root of the NHANES-metadata repository
 
-persistTextFiles = FALSE
 library(glue)
 library(stringr)
 
@@ -58,7 +57,7 @@ suppressWarnings({
 
 # create the VariableCodebook table in SQL
 SqlTools::dbSendUpdate(cn, "
-    CREATE TABLE NhanesLandingZone.dbo.VariableCodebook (
+    CREATE TABLE NhanesLandingZone.Metadata.VariableCodebook (
         Variable varchar(64),
         Questionnaire varchar(64),
         CodeOrValue varchar(64),
@@ -71,8 +70,8 @@ SqlTools::dbSendUpdate(cn, "
 
 # run bulk insert
 insertStatement = paste(sep="", "
-    BULK INSERT NhanesLandingZone.dbo.VariableCodebook FROM '", codebookFile, "'
-    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR=',')
+    BULK INSERT NhanesLandingZone.Metadata.VariableCodebook FROM '", codebookFile, "'
+    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
@@ -98,7 +97,7 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT ##tmp_nhanes_tables FROM '", tablesFile, "'
-    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR=',')
+    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
@@ -106,23 +105,17 @@ SqlTools::dbSendUpdate(cn, insertStatement)
 # clean up and insert in new table with consistent nomenclature
 SqlTools::dbSendUpdate(cn, "
     SELECT 
-        Q.Questionnaire, 
         T.TableName AS Description,
         T.DataGroup,
-        Q.BeginYear,
-        Q.EndYear,
         Q.TableName
-    INTO NhanesLandingZone.dbo.QuestionnaireDescriptions
+    INTO NhanesLandingZone.Metadata.QuestionnaireDescriptions
     FROM 
         ##tmp_nhanes_tables T 
-        INNER JOIN NhanesLandingZone.dbo.QuestionnaireVariables Q ON
-            T.[Table] = Q.Questionnaire
+        INNER JOIN NhanesLandingZone.Metadata.QuestionnaireVariables Q ON
+            T.[Table] = Q.TableName
     GROUP BY
-        Q.Questionnaire, 
         T.TableName,
         T.DataGroup,
-        Q.BeginYear,
-        Q.EndYear,
         Q.TableName
 ")
 
@@ -151,14 +144,14 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT ##tmp_nhanes_variables FROM '", variablesFile, "'
-    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR=',')
+    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
 
 # add columns to QuestionnaireVariables table to accommodate additional data
 SqlTools::dbSendUpdate(cn, "
-    ALTER TABLE NhanesLandingZone.dbo.QuestionnaireVariables 
+    ALTER TABLE NhanesLandingZone.Metadata.QuestionnaireVariables 
     ADD 
         Description varchar(1024) NULL, 
         Target varchar(128) NULL,
@@ -174,12 +167,10 @@ SqlTools::dbSendUpdate(cn, "
         Q.Target = V.Target,
         Q.SasLabel = V.SasLabel
     FROM 
-        NhanesLandingZone.dbo.QuestionnaireVariables Q
+        NhanesLandingZone.Metadata.QuestionnaireVariables Q
         INNER JOIN ##tmp_nhanes_variables V ON
-            Q.Questionnaire = V.[Table]
+            Q.TableName = V.[Table]
             AND Q.Variable = V.Variable
-
-    SELECT * FROM NhanesLandingZone.dbo.QuestionnaireVariables
 ")
 
 SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_variables")
@@ -187,7 +178,7 @@ SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_variables")
 # shrink transaction log
 SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
-SqlTools::dbSendUpdate(cn, "UPDATE [NhanesLandingZone].[dbo].[QuestionnaireVariables] SET Description =  'Respondent sequence number', SasLabel =  'Respondent sequence number' WHERE Variable = 'SEQN'")
+SqlTools::dbSendUpdate(cn, "UPDATE [NhanesLandingZone].[Metadata].[QuestionnaireVariables] SET Description =  'Respondent sequence number', SasLabel =  'Respondent sequence number' WHERE Variable = 'SEQN'")
 
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
@@ -201,32 +192,33 @@ for (currTable in ontology_tables) {
     if (currTable != "README.md") {
     path = ontologyTables
     loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
+    
+    sqlTableName = gsub(str_extract(currTable, '.*(?=\\.tsv)'), pattern = 'ontology_', replace = "", fixed = TRUE)
+    
     # generate SQL table definitions from column types in tibbles
-    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), str_extract(currTable, '.*(?=\\.tsv)'), loaded_data) # nolint
+    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste(sep=".", "Ontology", sqlTableName), loaded_data) # nolint
 
     # change TEXT to VARCHAR(256)
     createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
 
     # change DOUBLE to float
     createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+    
+    # remove double quotes, which interferes with the schema specification
+    createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
 
     # create the table in SQL
     SqlTools::dbSendUpdate(cn, createTableQuery)
 
     # run bulk insert
     insertStatement = paste(sep="",
-                            "BULK INSERT ",
-                            str_extract(currTable, '.*(?=\\.tsv)'),
+                            "BULK INSERT Ontology.",
+                            sqlTableName,
                             " FROM '",
                             paste0(path, currTable),
                             "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
     )
     SqlTools::dbSendUpdate(cn, insertStatement)
-
-    # if we don't want to keep the derived text files, then delete to save disk space
-    if (!persistTextFiles) {
-      file.remove(paste0(path, currTable))
-    }
 
   # keep memory as clean as possible
   rm(loaded_data)
@@ -245,70 +237,43 @@ SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 ontology_mappings <- list.files(ontologyMappings)
 
 for (currTable in ontology_mappings) {
+    
+    # TODO: we really only want to load this single table?  then why loop?
     if (currTable == "nhanes_variables_mappings.tsv") {
-    path = ontologyMappings
-    loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
+        path = ontologyMappings
+        loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
+        
+        colnames(loaded_data)[which(colnames(loaded_data) == "Table")] <- "TableName"
 
-    # generate SQL table definitions from column types in tibbles
-    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), str_extract(currTable, '.*(?=\\.tsv)'), loaded_data) # nolint
+        # generate SQL table definitions from column types in tibbles
+        createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("Ontology", str_extract(currTable, '.*(?=\\.tsv)'), sep="."), loaded_data) # nolint
 
-    # change TEXT to VARCHAR(256)
-    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
+        # change TEXT to VARCHAR(256)
+        createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
 
-    # change DOUBLE to VARCHAR(256)
-    createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" VARCHAR(512)", fixed = TRUE)
+        # change DOUBLE to VARCHAR(256)
+        createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" VARCHAR(512)", fixed = TRUE)
+        
+        # remove double quotes, which interferes with the schema specification
+        createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
+        
+        # create the table in SQL
+        SqlTools::dbSendUpdate(cn, createTableQuery)
 
-    # create the table in SQL
-    SqlTools::dbSendUpdate(cn, createTableQuery)
+        # run bulk insert
+        insertStatement = paste(sep="",
+                                "BULK INSERT Ontology.",
+                                str_extract(currTable, '.*(?=\\.tsv)'),
+                                " FROM '",
+                                paste0(path, currTable),
+                                "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
+        )
+        SqlTools::dbSendUpdate(cn, insertStatement)
 
-    # run bulk insert
-    insertStatement = paste(sep="",
-                            "BULK INSERT ",
-                            str_extract(currTable, '.*(?=\\.tsv)'),
-                            " FROM '",
-                            paste0(path, currTable),
-                            "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
-    )
-    SqlTools::dbSendUpdate(cn, insertStatement)
-
-    # if we don't want to keep the derived text files, then delete to save disk space
-    if (!persistTextFiles) {
-      file.remove(paste0(path, currTable))
-    }
-
-  # keep memory as clean as possible
-  rm(loaded_data)
-  gc()
+    # keep memory as clean as possible
+    rm(loaded_data)
+    gc()
  }
-}
-
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
-
-m = DBI::dbGetQuery(cn, "
-SELECT TABLE_NAME
-FROM INFORMATION_SCHEMA.TABLES
-WHERE 
-    TABLE_TYPE = 'BASE TABLE' 
-    AND TABLE_CATALOG='NhanesLandingZone'
-    AND TABLE_NAME != 'QuestionnaireVariables'
-    AND TABLE_NAME != 'DownloadErrors'
-    AND TABLE_NAME != 'VariableCodebook'
-    AND TABLE_NAME != 'QuestionnaireDescriptions'
-    AND TABLE_NAME != 'ontology_entailed_edges'
-    AND TABLE_NAME != 'ontology_labels'
-    AND TABLE_NAME != 'ontology_edges'
-    AND TABLE_NAME != 'nhanes_variables_mappings'
-    AND TABLE_NAME != 'ontology_dbxrefs'
-    ORDER BY TABLE_NAME ASC
-")
-
-#update all the questionnaire columns with the correct questionnaire names
-for (i in 1:nrow(m)) {
-    currTableName = m[i,"TABLE_NAME"]
-    DBI::dbGetQuery( cn, paste(sep="", "ALTER table ", currTableName, " add Description varchar(256)" ))
-    DBI::dbGetQuery( cn, paste(sep="", "UPDATE ", currTableName, " SET Description = QuestionnaireDescriptions.Description from ", currTableName ," LEFT JOIN QuestionnaireDescriptions ON ", currTableName, ".Questionnaire = QuestionnaireDescriptions.Questionnaire" ))
-    DBI::dbGetQuery( cn, paste(sep="", "UPDATE ", currTableName, " SET Description = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(Description, ':',''), '-', ''),' ',''),'.',''),'(', ''),')', ''), '&', ''), ',', '')"))
 }
 
 # shrink transaction log

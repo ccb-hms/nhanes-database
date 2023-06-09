@@ -140,11 +140,15 @@ colnames(fileListTable) = c(cnames, "ScrubbedDataType")
 
 if (!opt[["include-exclusions"]]){
   # create landing zone for the raw data, set recovery mode to simple
-  SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")}
-
-#todo: create schema originalcoding
-
+  SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")
   SqlTools::dbSendUpdate(cn, "ALTER DATABASE [NhanesLandingZone] SET RECOVERY SIMPLE")
+  SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
+  SqlTools::dbSendUpdate(cn, "CREATE SCHEMA Raw")
+  SqlTools::dbSendUpdate(cn, "CREATE SCHEMA Translated")
+  SqlTools::dbSendUpdate(cn, "CREATE SCHEMA Metadata")
+  SqlTools::dbSendUpdate(cn, "CREATE SCHEMA Ontology")
+}
+
   SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
 
 # prevent scientific notation
@@ -163,7 +167,8 @@ downloadErrors = dplyr::tibble(
   FileUrl=character(), 
   Error=character()
  )
-for (i in i:length(dataTypes)) {
+# for (i in i:length(dataTypes)) {
+for (i in i:10) {
     # get the name of the data type
     currDataType = dataTypes[i]
 
@@ -304,7 +309,7 @@ for (i in i:length(dataTypes)) {
       )
 
       # generate SQL table definitions from column types in tibbles
-      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), currDataType, m)
+      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("Raw", currDataType, sep="."), m)
 
       # change TEXT to VARCHAR(256)
       createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
@@ -315,12 +320,15 @@ for (i in i:length(dataTypes)) {
       # we know that SEQN should always be an INT
       createTableQuery = gsub(createTableQuery, pattern = "\"SEQN\" float", replace = "\"SEQN\" INT", fixed = TRUE) # nolint
 
+      # remove double quotes, which interferes with the schema specification
+      createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
+
       # create the table in SQL
       SqlTools::dbSendUpdate(cn, createTableQuery)
-
+      
       # run bulk insert
       insertStatement = paste(sep="",
-                              "BULK INSERT ",
+                              "BULK INSERT [NhanesLandingZone].[Raw].",
                               currDataType,
                               " FROM '",
                               currOutputFileName,
@@ -328,9 +336,12 @@ for (i in i:length(dataTypes)) {
       )
 
       SqlTools::dbSendUpdate(cn, insertStatement)
+      
+      indexStatement = paste(sep="",
+                              "CREATE CLUSTERED INDEX idxSeqn ON Raw.",
+                              currDataType, " (SEQN) WITH (SORT_IN_TEMPDB=ON, ONLINE=OFF, DATA_COMPRESSION=PAGE)")
 
-
-          # if we don't want to keep the derived text files, then delete to save disk space
+      # if we don't want to keep the derived text files, then delete to save disk space
       if (!persistTextFiles) {
         file.remove(currOutputFileName)
       }
@@ -343,13 +354,16 @@ for (i in i:length(dataTypes)) {
 
 if (!opt[["include-exclusions"]]) {
       # generate CREATE TABLE statement
-      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "QuestionnaireVariables", questionnaireVariables)
+      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "Metadata.QuestionnaireVariables", questionnaireVariables)
 
       # fix TEXT column types
       createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
 
       # change DOUBLE to float
       createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+
+      # remove double quotes, which interferes with the schema specification
+      createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
 
       # create the table in SQL
       SqlTools::dbSendUpdate(cn, createTableQuery)
@@ -371,7 +385,7 @@ if (!opt[["include-exclusions"]]) {
         # issue BULK INSERT
       insertStatement = paste(sep="",
                               "BULK INSERT ",
-                              "QuestionnaireVariables",
+                              "Metadata.QuestionnaireVariables",
                               " FROM '",
                               currOutputFileName,
                               "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
@@ -396,7 +410,7 @@ if (!opt[["include-exclusions"]]) {
         # issue BULK INSERT
       insertStatement = paste(sep="",
                               "BULK INSERT ",
-                              "QuestionnaireVariables",
+                              "Metadata.QuestionnaireVariables",
                               " FROM '",
                               currOutputFileName,
                               "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
@@ -415,7 +429,7 @@ if (!opt[["include-exclusions"]]) {
 
   if (!opt[["include-exclusions"]]) {
   # create a table to hold records of the failed file downloads
-  SqlTools::dbSendUpdate(cn, "CREATE TABLE DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
+  SqlTools::dbSendUpdate(cn, "CREATE TABLE Metadata.DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
 
   # generate file name for temporary output
   currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
@@ -435,7 +449,7 @@ if (!opt[["include-exclusions"]]) {
   # issue BULK INSERT
   insertStatement = paste(sep="",
                           "BULK INSERT ",
-                          "DownloadErrors",
+                          "Metadata.DownloadErrors",
                           " FROM '",
                           currOutputFileName,
                           "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
