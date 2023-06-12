@@ -107,7 +107,8 @@ SqlTools::dbSendUpdate(cn, "
     SELECT 
         T.TableName AS Description,
         T.DataGroup,
-        Q.TableName
+        Q.TableName,
+        T.Year
     INTO NhanesLandingZone.Metadata.QuestionnaireDescriptions
     FROM 
         ##tmp_nhanes_tables T 
@@ -116,7 +117,8 @@ SqlTools::dbSendUpdate(cn, "
     GROUP BY
         T.TableName,
         T.DataGroup,
-        Q.TableName
+        Q.TableName,
+        T.Year
 ")
 
 SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_tables")
