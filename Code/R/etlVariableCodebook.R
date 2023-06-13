@@ -71,7 +71,7 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT NhanesLandingZone.Metadata.VariableCodebook FROM '", codebookFile, "'
-    WITH (FORMAT=CSV, KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
@@ -97,7 +97,7 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT ##tmp_nhanes_tables FROM '", tablesFile, "'
-    WITH (FORMAT=CSV, KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
@@ -146,7 +146,7 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT ##tmp_nhanes_variables FROM '", variablesFile, "'
-    WITH (FORMAT=CSV, KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
@@ -218,7 +218,7 @@ for (currTable in ontology_tables) {
                             sqlTableName,
                             " FROM '",
                             paste0(path, currTable),
-                            "' WITH (FORMAT=CSV, KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
+                            "' WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
     )
     SqlTools::dbSendUpdate(cn, insertStatement)
 
@@ -268,7 +268,7 @@ for (currTable in ontology_mappings) {
                                 str_extract(currTable, '.*(?=\\.tsv)'),
                                 " FROM '",
                                 paste0(path, currTable),
-                                "' WITH (FORMAT=CSV, KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
+                                "' WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
         )
         SqlTools::dbSendUpdate(cn, insertStatement)
 
