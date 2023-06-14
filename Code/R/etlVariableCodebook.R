@@ -59,7 +59,7 @@ suppressWarnings({
 SqlTools::dbSendUpdate(cn, "
     CREATE TABLE NhanesLandingZone.Metadata.VariableCodebook (
         Variable varchar(64),
-        Questionnaire varchar(64),
+        [Table] varchar(64),
         CodeOrValue varchar(64),
         ValueDescription varchar(256),
         Count int,
@@ -71,10 +71,13 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT NhanesLandingZone.Metadata.VariableCodebook FROM '", codebookFile, "'
-    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
+
+# change column name [Table] to Tablename to be consistent with all other metadata tables
+SqlTools::dbSendUpdate(cn, "EXEC sp_RENAME 'NhanesLandingZone.Metadata.VariableCodebook.Table', 'TableName', 'COLUMN'")
 
 # shrink transaction log
 SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
@@ -97,18 +100,22 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT ##tmp_nhanes_tables FROM '", tablesFile, "'
-    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
+
+# As of v0.0.2, the nhanes_tables.tsv file includes doublequotes in the values. These lines replace them. 
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [Table] = REPLACE([Table], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [TableName] = REPLACE([TableName], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [DataGroup] = REPLACE([DataGroup], CHAR(34), '')")
 
 # clean up and insert in new table with consistent nomenclature
 SqlTools::dbSendUpdate(cn, "
     SELECT 
         T.TableName AS Description,
         T.DataGroup,
-        Q.TableName,
-        T.Year
+        Q.TableName
     INTO NhanesLandingZone.Metadata.QuestionnaireDescriptions
     FROM 
         ##tmp_nhanes_tables T 
@@ -117,8 +124,7 @@ SqlTools::dbSendUpdate(cn, "
     GROUP BY
         T.TableName,
         T.DataGroup,
-        Q.TableName,
-        T.Year
+        Q.TableName
 ")
 
 SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_tables")
@@ -137,16 +143,18 @@ SqlTools::dbSendUpdate(cn, "
     CREATE TABLE ##tmp_nhanes_variables (
         Variable varchar(64),
         [Table] varchar(64),
-        SasLabel varchar(64),
+        SASLabel varchar(64),
         EnglishText varchar(1024),
-        Target varchar(128)
+        Target varchar(128),
+        ProcessedText varchar(1024),
+        Tags varchar(128)
     )
 ")
 
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT ##tmp_nhanes_variables FROM '", variablesFile, "'
-    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
@@ -205,7 +213,7 @@ for (currTable in ontology_tables) {
 
     # change DOUBLE to float
     createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
-    
+
     # remove double quotes, which interferes with the schema specification
     createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
 
@@ -218,7 +226,7 @@ for (currTable in ontology_tables) {
                             sqlTableName,
                             " FROM '",
                             paste0(path, currTable),
-                            "' WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
+                            "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
     )
     SqlTools::dbSendUpdate(cn, insertStatement)
 
@@ -268,7 +276,7 @@ for (currTable in ontology_mappings) {
                                 str_extract(currTable, '.*(?=\\.tsv)'),
                                 " FROM '",
                                 paste0(path, currTable),
-                                "' WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
+                                "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
         )
         SqlTools::dbSendUpdate(cn, insertStatement)
 
