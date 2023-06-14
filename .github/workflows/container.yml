@@ -6,6 +6,7 @@ on:
     tags: [ v* ]
     paths-ignore:
       - '**/README.md'
+      -'**/ReleaseNotes_v0.0.2'
 
 jobs:
   build-container:
@@ -30,6 +31,6 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:version-0.0.2
+        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:version-0.0.3
         cache-from: type=gha
         cache-to: type=gha,mode=max
