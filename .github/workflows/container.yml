@@ -30,6 +30,6 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:version-0.0.1
+        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:version-0.0.2
         cache-from: type=gha
         cache-to: type=gha,mode=max
