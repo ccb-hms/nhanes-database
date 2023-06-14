@@ -59,7 +59,7 @@ suppressWarnings({
 SqlTools::dbSendUpdate(cn, "
     CREATE TABLE NhanesLandingZone.Metadata.VariableCodebook (
         Variable varchar(64),
-        [Table] varchar(64),
+        TableName varchar(64),
         CodeOrValue varchar(64),
         ValueDescription varchar(256),
         Count int,
@@ -76,8 +76,8 @@ insertStatement = paste(sep="", "
 
 SqlTools::dbSendUpdate(cn, insertStatement)
 
-# change column name [Table] to Tablename to be consistent with all other metadata tables
-SqlTools::dbSendUpdate(cn, "EXEC sp_RENAME 'NhanesLandingZone.Metadata.VariableCodebook.Table', 'TableName', 'COLUMN'")
+# # change column name [Table] to Tablename to be consistent with all other metadata tables
+# SqlTools::dbSendUpdate(cn, "EXEC sp_RENAME 'NhanesLandingZone.Metadata.VariableCodebook.Table', 'TableName', 'COLUMN'")
 
 # shrink transaction log
 SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
@@ -115,7 +115,8 @@ SqlTools::dbSendUpdate(cn, "
     SELECT 
         T.TableName AS Description,
         T.DataGroup,
-        Q.TableName
+        Q.TableName,
+        T.Year
     INTO NhanesLandingZone.Metadata.QuestionnaireDescriptions
     FROM 
         ##tmp_nhanes_tables T 
@@ -124,7 +125,8 @@ SqlTools::dbSendUpdate(cn, "
     GROUP BY
         T.TableName,
         T.DataGroup,
-        Q.TableName
+        Q.TableName,
+        T.Year
 ")
 
 SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_tables")

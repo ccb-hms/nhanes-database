@@ -83,7 +83,7 @@ AS
             LEFT OUTER JOIN Metadata.VariableCodebook V ON 
                 T.Variable = V.Variable 
                 AND CAST(T.Response AS VARCHAR) = CAST(V.CodeOrValue AS VARCHAR)
-                AND V.Questionnaire = ''' + @SourceTableName + '''        
+                AND V.TableName = ''' + @SourceTableName + '''        
     '
     -- PRINT @TranslateStmt
     EXEC (@TranslateStmt)
