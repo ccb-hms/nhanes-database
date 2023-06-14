@@ -6,7 +6,7 @@ on:
     tags: [ v* ]
     paths-ignore:
       - '**/README.md'
-      -'**/ReleaseNotes_v0.0.2'
+      - '**/ReleaseNotes_v0_0_3.txt'
 
 jobs:
   build-container:
