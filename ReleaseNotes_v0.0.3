@@ -1,5 +1,5 @@
 #################################################
-#       Version 0.0.2 Release Notes             #
+#       Version 0.0.3 Release Notes             #
 #################################################
 
 #The following tables/columns are expected in the db build 
@@ -16,3 +16,15 @@
 [NhanesLandingZone].[Ontology].[nhanes_variables_mappings] : Variable, TableName, SourceTermID, SourceTerm, MappedTempLabel, MappedTermCURIE, MappedTermIRI, MappingScore, Tags, Ontology
 
 #Sample Queries, and expected outputs:
+
+Query: SELECT * FROM [NhanesLandingZone].[Metadata].[QuestionnaireVariables]
+Expected Output: Around 42,000 rows, NULLS expected for Variable='SEQN' in 'Target' column
+
+Query: 
+Expected Output: 
+
+Query: 
+Expected Output: 
+
+Query: 
+Expected Output: 
