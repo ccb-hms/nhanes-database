@@ -1,8 +1,11 @@
 #################################################
 #       Version 0.0.3 Release Notes             #
 #################################################
+#Image size: 3.76 GB
 
+#--------------------------------------------------------------
 #The following tables/columns are expected in the db build 
+#--------------------------------------------------------------
 
 [NhanesLandingZone].[Metadata].[DownloadErrors] : DataType, FileUrl, Error
 [NhanesLandingZone].[Metadata].[QuestionnaireDescriptions] : Description, DataGroup, TableName
@@ -15,16 +18,19 @@
 [NhanesLandingZone].[Ontology].[labels] : Subject, Object, IRI, Ontology, Direct, Inherited
 [NhanesLandingZone].[Ontology].[nhanes_variables_mappings] : Variable, TableName, SourceTermID, SourceTerm, MappedTempLabel, MappedTermCURIE, MappedTermIRI, MappingScore, Tags, Ontology
 
+#--------------------------------------------------------------
 #Sample Queries, and expected outputs:
-
+#--------------------------------------------------------------
 Query: SELECT * FROM [NhanesLandingZone].[Metadata].[QuestionnaireVariables]
-Expected Output: Around 42,000 rows, NULLS expected for Variable='SEQN' in 'Target' column
+Expected Output: Around 47,000 rows, NULLS expected for Variable='SEQN' in 'Target' column
 
 Query: 
 Expected Output: 
 
-Query: 
-Expected Output: 
 
-Query: 
-Expected Output: 
+#--------------------------------------------------------------
+# Dockerfile Checks:
+#--------------------------------------------------------------
+EPICONDUCTOR_CONTAINER_VERSION should reflect the current release (v0.0.3)
+EPICONDUCTOR_COLLECTION_DATE should reflect the current release date (2023-06-13)
+NHANES-metadata $latestTag is 3.2.0
