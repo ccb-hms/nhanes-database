@@ -14,6 +14,8 @@ tablesFile = paste(sep = "/", getwd(), "metadata/nhanes_tables.tsv")
 variablesFile = paste(sep = "/", getwd(), "metadata/nhanes_variables.tsv")
 ontologyMappings = paste(sep = "/", getwd(), "ontology-mappings/")
 ontologyTables = paste(sep = "/", getwd(), "ontology-tables/")
+excludedTables = "/NHANES/excluded_tables.tsv"
+
 
 # parameters to connect to SQL
 sqlHost = "localhost"
@@ -76,8 +78,21 @@ insertStatement = paste(sep="", "
 
 SqlTools::dbSendUpdate(cn, insertStatement)
 
-# # change column name [Table] to Tablename to be consistent with all other metadata tables
-# SqlTools::dbSendUpdate(cn, "EXEC sp_RENAME 'NhanesLandingZone.Metadata.VariableCodebook.Table', 'TableName', 'COLUMN'")
+# create the ExcludedTables table in SQL
+SqlTools::dbSendUpdate(cn, "
+    CREATE TABLE NhanesLandingZone.Metadata.ExcludedTables (
+        TableName varchar(64),
+        Reason varchar(64)
+    )
+")
+
+# run bulk insert
+insertStatement = paste(sep="", "
+    BULK INSERT NhanesLandingZone.Metadata.ExcludedTables FROM '", excludedTables, "'
+    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+")
+
+SqlTools::dbSendUpdate(cn, insertStatement)
 
 # shrink transaction log
 SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")

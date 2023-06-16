@@ -27,10 +27,13 @@ Expected Output: Around 47,000 rows, NULLS expected for Variable='SEQN' in 'Targ
 Query: 
 Expected Output: 
 
-
 #--------------------------------------------------------------
 # Dockerfile Checks:
 #--------------------------------------------------------------
 EPICONDUCTOR_CONTAINER_VERSION should reflect the current release (v0.0.3)
 EPICONDUCTOR_COLLECTION_DATE should reflect the current release date (2023-06-13)
 NHANES-metadata $latestTag is 3.2.0
+
+#--------------------------------------------------------------
+# Row Counts and % Nulls Allowable
+#--------------------------------------------------------------
