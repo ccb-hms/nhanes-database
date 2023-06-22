@@ -29,9 +29,9 @@ AS
     FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_NAME = @SourceTableName AND TABLE_SCHEMA = @SourceTableSchema
 
-    -- create comma delimited list of columns to be selected from the source table
+    -- create comma delimited list of columns to be selected from the source table, including casting to varchar
     DECLARE @SourceSelectColNames varchar(8000)
-    SELECT @SourceSelectColNames=STRING_AGG('[' + COLUMN_NAME + ']', ', ') 
+    SELECT @SourceSelectColNames=STRING_AGG('CAST ([' + COLUMN_NAME + '] AS varchar(256)) AS ' + COLUMN_NAME, ', ') 
     FROM #tmpColNames
 
     -- PRINT @SourceSelectColNames
