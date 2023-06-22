@@ -1,7 +1,6 @@
     /*
         Stored procedure to translate variable responses in an NHANES questionnaire table
     */
-
 CREATE PROC spTranslateTable 
     @SourceTableSchema varchar(8000),
     @SourceTableName varchar(128),
@@ -28,17 +27,31 @@ AS
     INTO #tmpColNames
     FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_NAME = @SourceTableName AND TABLE_SCHEMA = @SourceTableSchema
+    
+    -- figure out whether this table has a SEQN or SAMPLEID primary key
+    DECLARE @pkColName varchar(256)
+    DECLARE @flag int
+    SELECT @flag = COUNT(1) FROM #tmpColNames WHERE COLUMN_NAME='SEQN'
+
+    IF @flag = 1
+        SET @pkColName = 'SEQN'
+    ELSE
+        SET @pkColName = 'SAMPLEID'
+    
+    PRINT @pkColName
+    
+    -- TODO: go through the rest of the SPROC and replace SEQN constants with @pkColName
 
     -- create comma delimited list of columns to be selected from the source table, including casting to varchar
-    DECLARE @SourceSelectColNames varchar(8000)
-    SELECT @SourceSelectColNames=STRING_AGG('CAST ([' + COLUMN_NAME + '] AS varchar(256)) AS ' + COLUMN_NAME, ', ') 
+    DECLARE @SourceSelectColNames varchar(MAX)
+    SELECT @SourceSelectColNames = STRING_AGG(CAST('CAST([' + COLUMN_NAME + '] AS varchar(MAX)) AS [' + COLUMN_NAME + ']' AS varchar(MAX)), ', ')
     FROM #tmpColNames
 
     -- PRINT @SourceSelectColNames
 
     -- create comma delimited list of columns to be unpivoted
-    DECLARE @UnpivotColNames varchar(8000)
-    SELECT @UnpivotColNames=STRING_AGG('[' + COLUMN_NAME + ']', ', ') 
+    DECLARE @UnpivotColNames varchar(MAX)
+    SELECT @UnpivotColNames=STRING_AGG(CAST('[' + COLUMN_NAME + ']' AS varchar(MAX)), ', ') 
     FROM #tmpColNames
     WHERE 
         COLUMN_NAME != 'SEQN'
@@ -49,7 +62,7 @@ AS
     -- PRINT @UnpivotColNames
 
     -- assemble dynamic SQL to unpivot the original table
-    DECLARE @unpivotStmt varchar(8000)
+    DECLARE @unpivotStmt varchar(MAX)
     SET @unpivotStmt = '
         SELECT SEQN, Variable, Response 
         INTO ' + @UnpivotTempTableName + '
@@ -70,7 +83,7 @@ AS
 
     -- assemble SQL to join the unpivoted table to the variable codebook
     -- to decode the responses
-    DECLARE @TranslateStmt varchar(8000)
+    DECLARE @TranslateStmt varchar(MAX)
     SET @TranslateStmt = '
         SELECT 
             T.SEQN,
@@ -89,7 +102,7 @@ AS
     EXEC (@TranslateStmt)
 
     -- assemble SQL to pivot the translated table back into the original schema
-    DECLARE @PivotStmt varchar(8000)
+    DECLARE @PivotStmt varchar(MAX)
     SET @PivotStmt = '
         SELECT * INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' FROM (
             SELECT 
