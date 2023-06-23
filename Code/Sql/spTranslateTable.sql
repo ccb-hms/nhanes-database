@@ -8,6 +8,26 @@ CREATE PROC spTranslateTable
     @DestinationTableName varchar(MAX)
 AS
 
+    -- check that the variable codebook actually has data for this table
+    DECLARE @variableTranslationCount INT
+    SELECT @variableTranslationCount = COUNT(*) FROM Metadata.VariableCodebook C WHERE C.TableName = @SourceTableName
+    
+    -- if there are no translatable variables for this table, just copy it over
+    IF @variableTranslationCount = 0
+        BEGIN
+        
+            PRINT 'There are no variables available to translate for ' + @SourceTableSchema + '.' + @SourceTableName + '.  Copying table as-is.'
+            DECLARE @CopyTableStatement varchar(MAX)
+            SET @CopyTableStatement = '
+                DROP TABLE IF EXISTS ' + @DestinationTableSchema + '.' + @DestinationTableName + '
+                SELECT * INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' FROM ' + @SourceTableSchema + '.' + @SourceTableName + '
+                CREATE CLUSTERED COLUMNSTORE INDEX idxSeqn ON ' + @DestinationTableSchema + '.' + @DestinationTableName
+        
+            EXEC(@CopyTableStatement)
+            -- we can't do any of the steps below, so just return
+            RETURN
+        END
+    
     -- drop the destination table if it exists
     DECLARE @DropDestinationStmt varchar(8000)
     SET @DropDestinationStmt = 'DROP TABLE IF EXISTS ' + @DestinationTableSchema + '.' + @DestinationTableName
@@ -28,19 +48,20 @@ AS
     FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_NAME = @SourceTableName AND TABLE_SCHEMA = @SourceTableSchema
     
-    -- figure out whether this table has a SEQN or SAMPLEID primary key
-    DECLARE @pkColName varchar(256)
-    DECLARE @flag int
-    SELECT @flag = COUNT(1) FROM #tmpColNames WHERE COLUMN_NAME='SEQN'
+    -- figure out which primary key column this table has
+    DROP TABLE IF EXISTS #tmpPkColNames
+    CREATE TABLE #tmpPkColNames (ColumnName varchar(8000), Priority int)
 
-    IF @flag = 1
-        SET @pkColName = 'SEQN'
-    ELSE
-        SET @pkColName = 'SAMPLEID'
+    INSERT INTO #tmpPkColNames VALUES ('SEQN', 1)
+    INSERT INTO #tmpPkColNames VALUES ('SAMPLEID', 2)
+    INSERT INTO #tmpPkColNames VALUES ('DRXFDCD', 3)
+    INSERT INTO #tmpPkColNames VALUES ('DRXMC', 4)
+    INSERT INTO #tmpPkColNames VALUES ('POOLID', 4)
     
-    -- PRINT @pkColName
-    
-    -- TODO: go through the rest of the SPROC and replace SEQN constants with @pkColName
+    DECLARE @pkColName varchar(256)
+    SELECT TOP 1 @pkColName = P.ColumnName FROM #tmpColNames C INNER JOIN #tmpPkColNames P ON C.COLUMN_NAME = P.ColumnName ORDER BY P.Priority
+
+    PRINT @pkColName
 
     -- create comma delimited list of columns to be selected from the source table, including casting to varchar
     DECLARE @SourceSelectColNames varchar(MAX)
@@ -49,13 +70,20 @@ AS
 
     -- PRINT @SourceSelectColNames
 
-    -- create comma delimited list of columns to be unpivoted
+    -- create comma delimited list of columns to be unpivoted, excluding primary key columns and old metadata
     DECLARE @UnpivotColNames varchar(MAX)
     SELECT @UnpivotColNames=STRING_AGG(CAST('[' + COLUMN_NAME + ']' AS varchar(MAX)), ', ') 
     FROM #tmpColNames
     WHERE 
+        -- primary key column names
+        -- TODO: copy them out of the #tmpPkColNames so we only need to update constants in one place
         COLUMN_NAME != 'SEQN'
         AND COLUMN_NAME != 'SAMPLEID'
+        AND COLUMN_NAME != 'DRXFDCD'
+        AND COLUMN_NAME != 'DRXMC'
+        AND COLUMN_NAME != 'POOLID'
+        -- metadata column names
+        -- TODO: remove these and test
         AND COLUMN_NAME != 'DownloadUrl'
         AND COLUMN_NAME != 'Questionnaire'
         AND COLUMN_NAME != 'Description'
