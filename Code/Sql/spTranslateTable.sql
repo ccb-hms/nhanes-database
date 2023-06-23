@@ -38,7 +38,7 @@ AS
     ELSE
         SET @pkColName = 'SAMPLEID'
     
-    PRINT @pkColName
+    -- PRINT @pkColName
     
     -- TODO: go through the rest of the SPROC and replace SEQN constants with @pkColName
 
