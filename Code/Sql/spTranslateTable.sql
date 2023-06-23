@@ -1,11 +1,11 @@
-    /*
-        Stored procedure to translate variable responses in an NHANES questionnaire table
-    */
+/*
+    Stored procedure to translate variable responses in an NHANES questionnaire table
+*/
 CREATE PROC spTranslateTable 
-    @SourceTableSchema varchar(8000),
-    @SourceTableName varchar(128),
-    @DestinationTableSchema varchar(8000),
-    @DestinationTableName varchar(128)
+    @SourceTableSchema varchar(MAX),
+    @SourceTableName varchar(MAX),
+    @DestinationTableSchema varchar(MAX),
+    @DestinationTableName varchar(MAX)
 AS
 
     -- drop the destination table if it exists
@@ -55,6 +55,7 @@ AS
     FROM #tmpColNames
     WHERE 
         COLUMN_NAME != 'SEQN'
+        AND COLUMN_NAME != 'SAMPLEID'
         AND COLUMN_NAME != 'DownloadUrl'
         AND COLUMN_NAME != 'Questionnaire'
         AND COLUMN_NAME != 'Description'
@@ -64,7 +65,7 @@ AS
     -- assemble dynamic SQL to unpivot the original table
     DECLARE @unpivotStmt varchar(MAX)
     SET @unpivotStmt = '
-        SELECT SEQN, Variable, Response 
+        SELECT ' + @pkColName + ', Variable, Response 
         INTO ' + @UnpivotTempTableName + '
         FROM (
             SELECT 
@@ -86,7 +87,7 @@ AS
     DECLARE @TranslateStmt varchar(MAX)
     SET @TranslateStmt = '
         SELECT 
-            T.SEQN,
+            T.' + @pkColName + ',
             T.Variable,
             COALESCE(CAST(V.ValueDescription AS VARCHAR), CAST(T.Response AS VARCHAR)) AS ValueDescription
         INTO 
@@ -106,7 +107,7 @@ AS
     SET @PivotStmt = '
         SELECT * INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' FROM (
             SELECT 
-                SEQN, 
+                ' + @pkColName + ', 
                 Variable, 
                 ValueDescription 
             FROM ' + @TranslatedTempTableName + '
@@ -125,8 +126,8 @@ AS
     -- insert rows where all of the variable responses were NULL in the original data
     DECLARE @InsertNullStmt varchar(8000)
     SET @InsertNullStmt = '
-        INSERT INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' (SEQN)
-        SELECT A.SEQN FROM ' + @SourceTableSchema + '.' + @SourceTableName + ' A LEFT OUTER JOIN ' + @DestinationTableSchema + '.' + @DestinationTableName + ' T ON A.SEQN = T.SEQN WHERE T.SEQN IS NULL
+        INSERT INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' (' + @pkColName + ')
+        SELECT A.' + @pkColName + ' FROM ' + @SourceTableSchema + '.' + @SourceTableName + ' A LEFT OUTER JOIN ' + @DestinationTableSchema + '.' + @DestinationTableName + ' T ON A.' + @pkColName + ' = T.' + @pkColName + ' WHERE T.' + @pkColName + ' IS NULL
     '
 
     -- PRINT @InsertNullStmt
