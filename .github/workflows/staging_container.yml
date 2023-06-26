@@ -3,7 +3,7 @@ name: Tag, Build, and Push Docker Image with Github Workflow
 #Set up tagging/building only on tag releases
 on:
   push:
-    tags: [ v* ]
+    tags: [ staging-v* ]
     paths-ignore:
       - '**/README.md'
 
@@ -30,6 +30,6 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:version-0.0.4
+        tags: hmsccb/nhanes-workbench:staging-version-0.0.1
         cache-from: type=gha
         cache-to: type=gha,mode=max
