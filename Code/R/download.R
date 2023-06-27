@@ -318,8 +318,12 @@ for (i in i:length(dataTypes)) {
       # change DOUBLE to float
       createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
 
-      # we know that SEQN should always be an INT
+      # we know that SEQN and other primary keys should always be an INT
       createTableQuery = gsub(createTableQuery, pattern = "\"SEQN\" float", replace = "\"SEQN\" INT", fixed = TRUE) # nolint
+      createTableQuery = gsub(createTableQuery, pattern = "\"SAMPLEID\" float", replace = "\"SAMPLEID\" INT", fixed = TRUE) # nolint
+      createTableQuery = gsub(createTableQuery, pattern = "\"DRXFDCD\" float", replace = "\"DRXFDCD\" INT", fixed = TRUE) # nolint
+      createTableQuery = gsub(createTableQuery, pattern = "\"DRXMC\" float", replace = "\"DRXMC\" INT", fixed = TRUE) # nolint
+      createTableQuery = gsub(createTableQuery, pattern = "\"POOLID\" float", replace = "\"POOLID\" INT", fixed = TRUE) # nolint
 
       # remove double quotes, which interferes with the schema specification
       createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
