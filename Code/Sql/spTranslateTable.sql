@@ -8,6 +8,7 @@ CREATE PROC spTranslateTable
     @DestinationTableName varchar(MAX)
 AS
 
+    
     -- check that the variable codebook actually has data for this table
     DECLARE @variableTranslationCount INT
     SELECT @variableTranslationCount = COUNT(*) FROM Metadata.VariableCodebook C WHERE C.TableName = @SourceTableName
@@ -22,8 +23,8 @@ AS
                 DROP TABLE IF EXISTS ' + @DestinationTableSchema + '.' + @DestinationTableName + '
                 SELECT * INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' FROM ' + @SourceTableSchema + '.' + @SourceTableName + '
                 CREATE CLUSTERED COLUMNSTORE INDEX idxSeqn ON ' + @DestinationTableSchema + '.' + @DestinationTableName
-        
             EXEC(@CopyTableStatement)
+            
             -- we can't do any of the steps below, so just return
             RETURN
         END
@@ -43,50 +44,74 @@ AS
 
     -- get all column names of the source table from the information schema
     DROP TABLE IF EXISTS #tmpColNames
-    SELECT COLUMN_NAME
+    SELECT COLUMN_NAME, ORDINAL_POSITION
     INTO #tmpColNames
     FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME = @SourceTableName AND TABLE_SCHEMA = @SourceTableSchema
+    WHERE 
+        TABLE_NAME = @SourceTableName 
+        AND TABLE_SCHEMA = @SourceTableSchema
     
-    -- figure out which primary key column this table has
+    -- SELECT * FROM #tmpColNames
+    
+    -- enumerate possible primary key column names
     DROP TABLE IF EXISTS #tmpPkColNames
     CREATE TABLE #tmpPkColNames (ColumnName varchar(8000), Priority int)
-
     INSERT INTO #tmpPkColNames VALUES ('SEQN', 1)
     INSERT INTO #tmpPkColNames VALUES ('SAMPLEID', 2)
     INSERT INTO #tmpPkColNames VALUES ('DRXFDCD', 3)
     INSERT INTO #tmpPkColNames VALUES ('DRXMC', 4)
-    INSERT INTO #tmpPkColNames VALUES ('POOLID', 4)
+    INSERT INTO #tmpPkColNames VALUES ('POOLID', 5)
+
+    -- Figure out which columns should remain numeric and not get translated
+    DROP TABLE IF EXISTS #tmpNumericColumns
+
+    SELECT C.COLUMN_NAME, ORDINAL_POSITION
+    INTO #tmpNumericColumns
+    FROM 
+        #tmpColNames C 
+        INNER JOIN Metadata.VariableCodebook V ON
+            V.TableName = @SourceTableName
+            AND C.COLUMN_NAME = V.Variable
+            AND V.ValueDescription = 'Range of Values'
+    WHERE C.COLUMN_NAME NOT IN (SELECT ColumnName FROM #tmpPkColNames)
+    GROUP BY C.COLUMN_NAME, ORDINAL_POSITION
+
+    -- SELECT * FROM #tmpNumericColumns
+
+    -- remove the numeric column names from the table that contains all columns to be translated
+    DELETE FROM #tmpColNames WHERE COLUMN_NAME IN (SELECT COLUMN_NAME FROM #tmpNumericColumns)
+
+    -- SELECT * FROM #tmpColNames
+
+     -- create comma delimited list of the numeric columns, will be used later to retrieve them from the source table
+    DECLARE @NumericSelectColNames varchar(MAX)
+    SELECT 
+        @NumericSelectColNames = STRING_AGG(CAST('[' + COLUMN_NAME + ']' AS varchar(MAX)), ', ') WITHIN GROUP (ORDER BY ORDINAL_POSITION)
+    FROM #tmpNumericColumns
     
-    DECLARE @pkColName varchar(256)
+    -- figure out which primary key column this table has    
+    DECLARE @pkColName varchar(MAX)
     SELECT TOP 1 @pkColName = P.ColumnName FROM #tmpColNames C INNER JOIN #tmpPkColNames P ON C.COLUMN_NAME = P.ColumnName ORDER BY P.Priority
 
-    PRINT @pkColName
+    -- PRINT @pkColName
 
     -- create comma delimited list of columns to be selected from the source table, including casting to varchar
     DECLARE @SourceSelectColNames varchar(MAX)
-    SELECT @SourceSelectColNames = STRING_AGG(CAST('CAST([' + COLUMN_NAME + '] AS varchar(MAX)) AS [' + COLUMN_NAME + ']' AS varchar(MAX)), ', ')
+    SELECT 
+        @SourceSelectColNames = STRING_AGG(CAST('CAST([' + COLUMN_NAME + '] AS varchar(MAX)) AS [' + COLUMN_NAME + ']' AS varchar(MAX)), ', ')
     FROM #tmpColNames
+    WHERE COLUMN_NAME != @pkColName
+
+    SET @SourceSelectColNames = CAST('[' AS varchar(MAX)) + @pkColName + CAST('], ' AS varchar(MAX)) + @SourceSelectColNames
 
     -- PRINT @SourceSelectColNames
 
-    -- create comma delimited list of columns to be unpivoted, excluding primary key columns and old metadata
+    -- create comma delimited list of columns to be unpivoted, excluding primary key column
     DECLARE @UnpivotColNames varchar(MAX)
-    SELECT @UnpivotColNames=STRING_AGG(CAST('[' + COLUMN_NAME + ']' AS varchar(MAX)), ', ') 
+    SELECT @UnpivotColNames=STRING_AGG(CAST('[' + COLUMN_NAME + ']' AS varchar(MAX)), ', ') WITHIN GROUP (ORDER BY ORDINAL_POSITION)
     FROM #tmpColNames
     WHERE 
-        -- primary key column names
-        -- TODO: copy them out of the #tmpPkColNames so we only need to update constants in one place
-        COLUMN_NAME != 'SEQN'
-        AND COLUMN_NAME != 'SAMPLEID'
-        AND COLUMN_NAME != 'DRXFDCD'
-        AND COLUMN_NAME != 'DRXMC'
-        AND COLUMN_NAME != 'POOLID'
-        -- metadata column names
-        -- TODO: remove these and test
-        AND COLUMN_NAME != 'DownloadUrl'
-        AND COLUMN_NAME != 'Questionnaire'
-        AND COLUMN_NAME != 'Description'
+        COLUMN_NAME NOT IN (SELECT ColumnName FROM #tmpPkColNames)
 
     -- PRINT @UnpivotColNames
 
@@ -133,19 +158,24 @@ AS
     -- assemble SQL to pivot the translated table back into the original schema
     DECLARE @PivotStmt varchar(MAX)
     SET @PivotStmt = '
-        SELECT * INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' FROM (
-            SELECT 
-                ' + @pkColName + ', 
-                Variable, 
-                ValueDescription 
-            FROM ' + @TranslatedTempTableName + '
-        ) AS SourceTable
-        PIVOT (
-            MAX(ValueDescription)
-            FOR Variable IN (
-                    ' + @UnpivotColNames + '
-                ) 
-        ) AS PivotTable
+        WITH PivotTable AS(
+            SELECT * 
+            FROM (
+                SELECT 
+                    ' + @pkColName + ', 
+                    Variable, 
+                    ValueDescription 
+                FROM ' + @TranslatedTempTableName + '
+            ) AS SourceTable
+            PIVOT (
+                MAX(ValueDescription)
+                FOR Variable IN (
+                        ' + @UnpivotColNames + '
+                    ) 
+            ) AS PivotTable
+        )
+        SELECT P.*, ' + @NumericSelectColNames + ' INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' 
+        FROM PivotTable P INNER JOIN ' + @SourceTableSchema + '.' + @SourceTableName + ' S ON S.[' + @pkColName + '] = P.[' + @pkColName + ']
     '
 
     -- PRINT @PivotStmt
@@ -165,7 +195,8 @@ AS
     DECLARE @IndexStmt varchar(8000)
     SET @IndexStmt = 'CREATE CLUSTERED COLUMNSTORE INDEX idxSeqn ON ' + @DestinationTableSchema + '.' + @DestinationTableName
 
-    --EXEC('SELECT * FROM ' + @DestinationTableName)
+    -- EXEC('SELECT TOP 5 * FROM ' + @DestinationTableSchema + '.' + @DestinationTableName + ' ORDER BY SEQN')
+    -- EXEC('SELECT TOP 5 * FROM ' + @SourceTableSchema + '.' + @SourceTableName + ' ORDER BY SEQN')
 
     DECLARE @GarbageCollectionStmt varchar(8000)
     SET @GarbageCollectionStmt = 'DROP TABLE IF EXISTS ' + @UnpivotTempTableName
