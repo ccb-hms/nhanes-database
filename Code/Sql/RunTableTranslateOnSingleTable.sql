@@ -1,4 +1,4 @@
--- Manually run spTranslateTable
+-- Manually run spTranslateTable for debugging
 
 DECLARE @RC int
 DECLARE @SourceTableSchema varchar(8000)
@@ -9,7 +9,7 @@ DECLARE @DestinationTableName varchar(128)
 -- TODO: Set parameter values here.
 -- CAFE_G
 SET @SourceTableSchema  = 'Raw'
-SET @SourceTableName  = 'AUX_I'
+SET @SourceTableName  = 'VARLK_C'
 SET @DestinationTableSchema  = 'Translated'
 
 EXECUTE @RC = [dbo].[spTranslateTable] 
@@ -18,4 +18,7 @@ EXECUTE @RC = [dbo].[spTranslateTable]
   ,@DestinationTableSchema
   ,@DestinationTableName = @SourceTableName
 
-EXEC ('SELECT * FROM ' + @DestinationTableSchema + '.' + @SourceTableName)  
+EXEC ('SELECT TOP 10 * FROM ' + @DestinationTableSchema + '.' + @SourceTableName ) --+ ' ORDER BY SEQN')
+EXEC ('SELECT TOP 10 * FROM ' + @SourceTableSchema + '.' + @SourceTableName ) -- + ' ORDER BY SEQN')
+
+-- SELECT * FROM Metadata.VariableCodebook V WHERE V.TableName='AUX_J' AND (Variable='AUQ011' OR Variable='AUQ540')
