@@ -343,7 +343,7 @@ for (i in i:length(dataTypes)) {
       SqlTools::dbSendUpdate(cn, insertStatement)
       
       indexStatement = paste(sep="",
-        "CREATE CLUSTERED COLUMNSTORE INDEX idxSeqn ON Raw.", currDataType)
+        "CREATE CLUSTERED COLUMNSTORE INDEX ccix ON Raw.", currDataType)
                               
       SqlTools::dbSendUpdate(cn, indexStatement)
 

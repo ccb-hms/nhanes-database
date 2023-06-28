@@ -261,7 +261,7 @@ AS
 
     -- create a clustered index on the destination table with compression
     DECLARE @IndexStmt varchar(8000)
-    SET @IndexStmt = 'CREATE CLUSTERED COLUMNSTORE INDEX idxSeqn ON ' + @DestinationTableSchema + '.' + @DestinationTableName
+    SET @IndexStmt = 'CREATE CLUSTERED COLUMNSTORE INDEX ccix ON ' + @DestinationTableSchema + '.' + @DestinationTableName
 
     -- debugging
     -- EXEC('SELECT TOP 5 * FROM ' + @DestinationTableSchema + '.' + @DestinationTableName + ' ORDER BY SEQN')
