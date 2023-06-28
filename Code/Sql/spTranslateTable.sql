@@ -1,6 +1,9 @@
 /*
     Stored procedure to translate variable responses in an NHANES questionnaire table
 */
+DROP PROC IF EXISTS spTranslateTable
+GO
+
 CREATE PROC spTranslateTable 
     @SourceTableSchema varchar(MAX),
     @SourceTableName varchar(MAX),
@@ -51,8 +54,9 @@ AS
         TABLE_NAME = @SourceTableName 
         AND TABLE_SCHEMA = @SourceTableSchema
     
+    -- debugging
     -- SELECT * FROM #tmpColNames
-    
+
     -- enumerate possible primary key column names
     DROP TABLE IF EXISTS #tmpPkColNames
     CREATE TABLE #tmpPkColNames (ColumnName varchar(8000), Priority int)
@@ -61,6 +65,13 @@ AS
     INSERT INTO #tmpPkColNames VALUES ('DRXFDCD', 3)
     INSERT INTO #tmpPkColNames VALUES ('DRXMC', 4)
     INSERT INTO #tmpPkColNames VALUES ('POOLID', 5)
+
+    -- figure out which primary key column this table has
+    DECLARE @pkColName varchar(MAX)
+    SELECT TOP 1 @pkColName = P.ColumnName FROM #tmpColNames C INNER JOIN #tmpPkColNames P ON C.COLUMN_NAME = P.ColumnName ORDER BY P.Priority
+
+    -- debugging
+    -- PRINT @pkColName
 
     -- Figure out which columns should remain numeric and not get translated
     DROP TABLE IF EXISTS #tmpNumericColumns
@@ -76,25 +87,42 @@ AS
     WHERE C.COLUMN_NAME NOT IN (SELECT ColumnName FROM #tmpPkColNames)
     GROUP BY C.COLUMN_NAME, ORDINAL_POSITION
 
+    -- debugging
     -- SELECT * FROM #tmpNumericColumns
 
     -- remove the numeric column names from the table that contains all columns to be translated
     DELETE FROM #tmpColNames WHERE COLUMN_NAME IN (SELECT COLUMN_NAME FROM #tmpNumericColumns)
 
-    -- SELECT * FROM #tmpColNames
+    -- check whether there are any categorical columns left
+    DECLARE @categoricalVariableCount INT
+    SELECT @categoricalVariableCount = COUNT(*) FROM #tmpColNames WHERE COLUMN_NAME != @pkColName
+
+    -- debugging
+    -- PRINT 'number categorical cols left:'
+    -- PRINT @categoricalVariableCount
+    
+    -- if there are no translatable variables for this table, just copy it over
+    IF @categoricalVariableCount = 0
+        BEGIN
+            EXEC('
+                DROP TABLE IF EXISTS ' + @DestinationTableSchema + '.' + @DestinationTableName + '
+                SELECT * INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' FROM ' + @SourceTableSchema + '.' + @SourceTableName + '
+                CREATE CLUSTERED COLUMNSTORE INDEX idxSeqn ON ' + @DestinationTableSchema + '.' + @DestinationTableName)
+            
+            -- we can't do any of the steps below, so just return
+            RETURN
+        END
 
      -- create comma delimited list of the numeric columns, will be used later to retrieve them from the source table
     DECLARE @NumericSelectColNames varchar(MAX)
     SELECT 
         @NumericSelectColNames = STRING_AGG(CAST('[' + COLUMN_NAME + ']' AS varchar(MAX)), ', ') WITHIN GROUP (ORDER BY ORDINAL_POSITION)
     FROM #tmpNumericColumns
+
+    -- debugging
+    -- PRINT 'Numeric cols:'
+    -- PRINT @NumericSelectColNames
     
-    -- figure out which primary key column this table has    
-    DECLARE @pkColName varchar(MAX)
-    SELECT TOP 1 @pkColName = P.ColumnName FROM #tmpColNames C INNER JOIN #tmpPkColNames P ON C.COLUMN_NAME = P.ColumnName ORDER BY P.Priority
-
-    -- PRINT @pkColName
-
     -- create comma delimited list of columns to be selected from the source table, including casting to varchar
     DECLARE @SourceSelectColNames varchar(MAX)
     SELECT 
@@ -104,6 +132,8 @@ AS
 
     SET @SourceSelectColNames = CAST('[' AS varchar(MAX)) + @pkColName + CAST('], ' AS varchar(MAX)) + @SourceSelectColNames
 
+    -- debugging
+    -- PRINT 'source select col names:' 
     -- PRINT @SourceSelectColNames
 
     -- create comma delimited list of columns to be unpivoted, excluding primary key column
@@ -113,6 +143,8 @@ AS
     WHERE 
         COLUMN_NAME NOT IN (SELECT ColumnName FROM #tmpPkColNames)
 
+    -- debugging
+    -- PRINT 'unpivot col names:'
     -- PRINT @UnpivotColNames
 
     -- assemble dynamic SQL to unpivot the original table
@@ -131,6 +163,7 @@ AS
             )
         ) AS unpvt'
 
+    -- debugging
     -- PRINT @unpivotStmt
     EXEC ('DROP TABLE IF EXISTS ' + @UnpivotTempTableName)
     EXEC(@unpivotStmt)
@@ -152,32 +185,67 @@ AS
                 AND CAST(T.Response AS VARCHAR) = CAST(V.CodeOrValue AS VARCHAR)
                 AND V.TableName = ''' + @SourceTableName + '''        
     '
+    
+    -- debugging
     -- PRINT @TranslateStmt
     EXEC (@TranslateStmt)
 
     -- assemble SQL to pivot the translated table back into the original schema
     DECLARE @PivotStmt varchar(MAX)
-    SET @PivotStmt = '
-        WITH PivotTable AS(
-            SELECT * 
-            FROM (
-                SELECT 
-                    ' + @pkColName + ', 
-                    Variable, 
-                    ValueDescription 
-                FROM ' + @TranslatedTempTableName + '
-            ) AS SourceTable
-            PIVOT (
-                MAX(ValueDescription)
-                FOR Variable IN (
-                        ' + @UnpivotColNames + '
-                    ) 
-            ) AS PivotTable
-        )
-        SELECT P.*, ' + @NumericSelectColNames + ' INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' 
-        FROM PivotTable P INNER JOIN ' + @SourceTableSchema + '.' + @SourceTableName + ' S ON S.[' + @pkColName + '] = P.[' + @pkColName + ']
-    '
 
+    -- if there are numeric columns that need to be merged with the translated categotical columns
+    IF @NumericSelectColNames IS NOT NULL
+        BEGIN
+            -- build the query to include a join against the source table
+            SET @PivotStmt = '
+                WITH PivotTable AS(
+                    SELECT * 
+                    FROM (
+                        SELECT 
+                            ' + @pkColName + ', 
+                            Variable, 
+                            ValueDescription 
+                        FROM ' + @TranslatedTempTableName + '
+                    ) AS SourceTable
+                    PIVOT (
+                        MAX(ValueDescription)
+                        FOR Variable IN (
+                                ' + @UnpivotColNames + '
+                            ) 
+                    ) AS PivotTable
+                )
+                SELECT P.*, ' + @NumericSelectColNames + ' INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' 
+                FROM PivotTable P INNER JOIN ' + @SourceTableSchema + '.' + @SourceTableName + ' S ON S.[' + @pkColName + '] = P.[' + @pkColName + ']
+            '
+        END
+    ELSE
+        BEGIN
+            -- since we have no columns to merge from the original source table, just pivot the 
+            -- translated variables and insert into the destination table
+            SET @PivotStmt = '
+                WITH PivotTable AS(
+                    SELECT * 
+                    FROM (
+                        SELECT 
+                            ' + @pkColName + ', 
+                            Variable, 
+                            ValueDescription 
+                        FROM ' + @TranslatedTempTableName + '
+                    ) AS SourceTable
+                    PIVOT (
+                        MAX(ValueDescription)
+                        FOR Variable IN (
+                                ' + @UnpivotColNames + '
+                            ) 
+                    ) AS PivotTable
+                )
+                SELECT P.* INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' 
+                FROM PivotTable P
+            '
+        END
+
+    -- debugging
+    -- PRINT 'Pivot statement:'
     -- PRINT @PivotStmt
     EXEC(@PivotStmt) 
 
@@ -195,6 +263,7 @@ AS
     DECLARE @IndexStmt varchar(8000)
     SET @IndexStmt = 'CREATE CLUSTERED COLUMNSTORE INDEX idxSeqn ON ' + @DestinationTableSchema + '.' + @DestinationTableName
 
+    -- debugging
     -- EXEC('SELECT TOP 5 * FROM ' + @DestinationTableSchema + '.' + @DestinationTableName + ' ORDER BY SEQN')
     -- EXEC('SELECT TOP 5 * FROM ' + @SourceTableSchema + '.' + @SourceTableName + ' ORDER BY SEQN')
 
