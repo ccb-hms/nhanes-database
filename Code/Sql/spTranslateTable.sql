@@ -84,7 +84,7 @@ AS
             V.TableName = @SourceTableName
             AND C.COLUMN_NAME = V.Variable
             AND V.ValueDescription = 'Range of Values'
-    WHERE C.COLUMN_NAME NOT IN (SELECT ColumnName FROM #tmpPkColNames)
+    WHERE C.COLUMN_NAME != @pkColName
     GROUP BY C.COLUMN_NAME, ORDINAL_POSITION
 
     -- debugging
