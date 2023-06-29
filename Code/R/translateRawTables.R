@@ -45,3 +45,8 @@ for (i in 1:nrow(tableList)) {
     SqlTools::dbSendUpdate(cn, stmt)
 }
 
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
