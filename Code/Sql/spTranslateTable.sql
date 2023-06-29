@@ -139,7 +139,7 @@ AS
     SELECT @UnpivotColNames=STRING_AGG(CAST('[' + COLUMN_NAME + ']' AS varchar(MAX)), ', ') WITHIN GROUP (ORDER BY ORDINAL_POSITION)
     FROM #tmpColNames
     WHERE 
-        COLUMN_NAME NOT IN (SELECT ColumnName FROM #tmpPkColNames)
+        COLUMN_NAME != @pkColName
 
     -- debugging
     -- PRINT 'unpivot col names:'
