@@ -16,6 +16,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
+    - name: Set Tag Output
+      id: vars 
+      run: if [[ ${GITHUB_REF#refs/*/}  == staging-v* ]]; then echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT; else echo "tag=dev" >> $GITHUB_OUTPUT; fi
+      
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
@@ -39,6 +43,6 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:${{ env.TAG }}
+        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:${{ steps.env.TAG }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
