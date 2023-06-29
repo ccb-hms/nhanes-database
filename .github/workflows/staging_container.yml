@@ -43,6 +43,6 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:${{ env.TOXENV }}
+        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:${{ env.TAG }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
