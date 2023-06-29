@@ -1,8 +1,6 @@
 /*
     Stored procedure to translate variable responses in an NHANES questionnaire table
 */
-DROP PROC IF EXISTS spTranslateTable
-GO
 
 CREATE PROC spTranslateTable 
     @SourceTableSchema varchar(MAX),
