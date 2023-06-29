@@ -21,15 +21,18 @@ WHERE
     AND TABLE_NAME != 'DownloadErrors'
     AND TABLE_NAME != 'VariableCodebook'
     AND TABLE_NAME != 'QuestionnaireDescriptions'
-    AND TABLE_NAME != 'ontology_entailed_edges'
-    AND TABLE_NAME != 'ontology_labels'
-    AND TABLE_NAME != 'ontology_edges'
+    AND TABLE_NAME != 'dbxrefs'
+    AND TABLE_NAME != 'entailed_edges'
+    AND TABLE_NAME != 'edges'
+    AND TABLE_NAME != 'labels'
     AND TABLE_NAME != 'nhanes_variables_mappings'
+    AND TABLE_NAME != 'ExcludedTables'
 ")
 
 for (i in 1:nrow(m)) {
     
     currTableName = m[i,"TABLE_NAME"]
+    
     questionnaireLables = DBI::dbGetQuery(
         cn, 
         paste(
@@ -44,4 +47,5 @@ for (i in 1:nrow(m)) {
             cn, 
             paste(sep="", "CREATE VIEW ", currQuestionnaire, " AS SELECT * FROM ", currTableName, " WHERE Questionnaire = '", currQuestionnaire, "'"))
     }
+
 }

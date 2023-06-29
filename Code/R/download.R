@@ -26,7 +26,7 @@ optionList = list(
                         help="is this script running inside of a container build process", metavar="logical"),
                   
   optparse::make_option(c("--include-exclusions"), type="logical", default=FALSE, 
-                        help="whether or not to exclude the tables in Code/R/excludedtables.txt", metavar="logical")
+                        help="whether or not to exclude the tables in Code/R/excluded_tables.tsv", metavar="logical")
 ); 
 
 optParser = optparse::OptionParser(option_list=optionList);
@@ -99,13 +99,12 @@ fileListTable$'Data File'<- gsub('([A-z]+) .*', '\\1', as.character(fileListTabl
 fileListTable$'Data File' <- paste0(fileListTable$'Data File', ".XPT")
 fileListTable$'Data File'<-gsub(" Data","",as.character(fileListTable$'Data File'))
 
-excludedTables <- read_csv("/NHANES/excludedtables.txt")
-print(nrow(excludedTables))
+excludedTables = read.csv("/NHANES/excluded_tables.tsv", sep='\t')
 
 if (!opt[["include-exclusions"]]) {
-    fileListTable <- fileListTable[!grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File Name'),]
+    fileListTable <- fileListTable[!grepl(paste(excludedTables$TableName, collapse = "|"), fileListTable$'Data File Name'),]
 } else{
-    fileListTable <- fileListTable[grepl(paste(excludedTables$ExcludedTables, collapse = "|"), fileListTable$'Data File Name'),]  
+    fileListTable <- fileListTable[grepl(paste(excludedTables$TableName, collapse = "|"), fileListTable$'Data File Name'),]  
  }
 
 # enumerate distinct data types
