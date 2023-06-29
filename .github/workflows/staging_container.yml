@@ -16,6 +16,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
+    - name: Set Tag Output
+      id: vars 
+      run: if [[ ${GITHUB_REF#refs/*/}  == v* ]]; then echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT; else echo "tag=dev" >> $GITHUB_OUTPUT; fi
+      
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
@@ -24,13 +28,6 @@ jobs:
       with:
         username: ${{ secrets.DOCKER_HUB_ACCESS_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-
-    - name: Docker meta
-      id: meta
-      uses: docker/metadata-action@v4
-      with:
-        images: hmsccb/nhanes-workbench
-        tags: type=match,pattern=staging-v(.*),group=1
         
     - name: Build, Tag, and Push to Docker Hub
       uses: docker/build-push-action@v4
@@ -38,7 +35,6 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: staging-version-${{ steps.meta.outputs.tags }}
-        labels: staging-version-${{ steps.meta.outputs.labels }}
+        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:staging-version-${{ steps.vars.outputs.tag }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
