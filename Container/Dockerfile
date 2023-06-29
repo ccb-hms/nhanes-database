@@ -307,9 +307,8 @@ RUN mkdir /HostData
 
 # Copy the download and demo scripts
 RUN mkdir /NHANES
-# copy the ExludedTables file over
-COPY Code/R/excluded_tables.tsv /NHANES/excluded_tables.tsv
 COPY Code/R/download.R /NHANES/download.R
+COPY Code/R/excludedtables.txt /NHANES/excludedtables.txt
 COPY Code/R/regressionExample.R /NHANES/regressionExample.R
 RUN chmod -R 777 /NHANES
 
@@ -356,7 +355,7 @@ WORKDIR /NHANES
 
 # Declare which version of the container this is, and make it available inside the container 
 ENV EPICONDUCTOR_CONTAINER_VERSION v0.0.4
-ENV EPICONDUCTOR_COLLECTION_DATE 2023-06-16
+ENV EPICONDUCTOR_COLLECTION_DATE 2023-06-28
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
