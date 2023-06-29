@@ -28,14 +28,13 @@ jobs:
       with:
         username: ${{ secrets.DOCKER_HUB_ACCESS_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-    
-    - name: tag version
-      env: 
-          TAG: "${{ steps.vars.outputs.tag }}"
-      run: |
-        TAG=${{ env.TAG }}
-        TAG=${TAG/staging-v//staging-version-}
-        echo TAG=${TAG} >> $GITHUB_ENV
+
+    - uses: mad9000/actions-find-and-replace-string@2
+      id: findandreplace
+      with:
+        source: ${{ steps.vars.outputs.tag }}
+        find: 'staging-v'        
+        replace: 'staging-version-'
 
     - name: Build, Tag, and Push to Docker Hub
       uses: docker/build-push-action@v4
@@ -43,6 +42,6 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:${{ steps.env.TAG }}
+        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:${{ steps.vars.outputs.tag }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
