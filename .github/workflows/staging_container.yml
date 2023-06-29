@@ -30,15 +30,8 @@ jobs:
     - uses: docker/metadata-action@v4
     - with:
         # list of Docker images to use as base name for tags
-        images: |
-          hmsccb/nhanes-workbench
-        # generate Docker tags based on the following events/attributes
-        tags: |
-          type=match,pattern=\d.\d.\d
-        # define match group
-          type=match,pattern=staging-v(.*),group=1
-        # use custom value instead of git tag
-          type=match,pattern=staging-v(.*),group=1
+        images: hmsccb/nhanes-workbench
+        tags: type=match,pattern=staging-v(.*),group=1
         
     - name: Build, Tag, and Push to Docker Hub
       uses: docker/build-push-action@v4
