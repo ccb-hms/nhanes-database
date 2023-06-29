@@ -26,10 +26,9 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
     - name: Docker meta
-    - id: meta
-    - uses: docker/metadata-action@v4
-    - with:
-        # list of Docker images to use as base name for tags
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
         images: hmsccb/nhanes-workbench
         tags: type=match,pattern=staging-v(.*),group=1
         
