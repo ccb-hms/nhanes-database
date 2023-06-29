@@ -18,7 +18,7 @@ jobs:
 
     - name: Set Tag Output
       id: vars 
-      run: if [[ ${GITHUB_REF#refs/*/}  == v* ]]; then echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT; else echo "tag=dev" >> $GITHUB_OUTPUT; fi
+      run: if [[ ${GITHUB_REF#refs/*/}  == staging-v* ]]; then echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT; else echo "tag=dev" >> $GITHUB_OUTPUT; fi
       
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
@@ -35,6 +35,6 @@ jobs:
         context: .
         file: ./Container/Dockerfile
         push: true
-        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:staging-version-${{ steps.vars.outputs.tag }}
+        tags: hmsccb/nhanes-workbench:latest, hmsccb/nhanes-workbench:${{ replace(steps.vars.outputs.tag, 'staging-v', 'staging-version-') }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
