@@ -241,6 +241,9 @@ RUN Rscript -e "remotes::install_cran('testthat')"
 RUN Rscript -e "remotes::install_cran('DBI')"
 RUN Rscript -e "remotes::install_cran('odbc')"
 RUN Rscript -e "remotes::install_cran('readr')"
+RUN Rscript -e "remotes::install_cran('kableExtra')"
+RUN Rscript -e "remotes::install_cran('plotROC')"
+RUN Rscript -e "remotes::install_cran('sjPlot')"
 
 # -- vanilla because there is a bug that causes the R intro / preamble text to get pushed into the compiler
 RUN Rscript --vanilla -e "remotes::install_cran('lme4', repos='"$R_REPOSITORY"')"
@@ -326,15 +329,33 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awai
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
 COPY Code/R/createQuestionnaireViews.R /NHANES/createQuestionnaireViews.R
 WORKDIR /tmp
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+	&& apt-get install \
+		-y \
+		python3.9 \
+		python3-pip
+
 RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
+
 WORKDIR /tmp/NHANES-metadata
-RUN git fetch --tags
-RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
-RUN git checkout $latestTag
+RUN git checkout v3.2.0
+
+RUN python3.9 -m pip install pydantic==1.7
+RUN python3.9 -m pip install pandas==1.5.3
+RUN python3.9 -m pip install Owlready2
+RUN python3.9 -m pip install text2term==2.3.2
+
+WORKDIR /tmp/NHANES-metadata/code
+
+RUN python3.9 preprocess_metadata.py
+RUN python3.9 generate_ontology_mappings.py
+
+WORKDIR /tmp/NHANES-metadata
 
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
-	
+
 # install packages, which require newer version of rvest in conflict with the download / build script
 RUN Rscript -e "remotes::install_version('nhanesA', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.7.1')"
 RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
@@ -354,8 +375,8 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 WORKDIR /NHANES
 
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION v0.0.4
-ENV EPICONDUCTOR_COLLECTION_DATE 2023-06-28
+ENV EPICONDUCTOR_CONTAINER_VERSION staging-v0.0.5
+ENV EPICONDUCTOR_COLLECTION_DATE 2023-06-30
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
