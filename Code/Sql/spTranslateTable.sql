@@ -212,8 +212,10 @@ AS
                             ) 
                     ) AS PivotTable
                 )
-                SELECT P.*, ' + @NumericSelectColNames + ' INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' 
-                FROM PivotTable P INNER JOIN ' + @SourceTableSchema + '.' + @SourceTableName + ' S ON S.[' + @pkColName + '] = P.[' + @pkColName + ']
+                -- full outer join to accommodate scenarios where the categorical variables were all NULL
+                SELECT COALESCE(P.' + @pkColName + ', S.' + @pkColName + ') AS ' + @pkColName + REPLACE(', ' + @UnpivotColNames, ', [', ', P.[') +
+                REPLACE(', ' + @NumericSelectColNames, ', [', ', S.[') + ' INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' 
+                FROM PivotTable P FULL OUTER JOIN ' + @SourceTableSchema + '.' + @SourceTableName + ' S ON S.[' + @pkColName + '] = P.[' + @pkColName + ']
             '
         END
     ELSE
