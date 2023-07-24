@@ -23,6 +23,8 @@ sqlUserName = "sa"
 sqlPassword = "yourStrong(!)Password"
 sqlDefaultDb = "NhanesLandingZone"
 
+print("starting")
+
 # loop waiting for SQL Server database to become available
 for (i in 1:60) {
     cn = tryCatch(
@@ -73,10 +75,11 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT NhanesLandingZone.Metadata.VariableCodebook FROM '", codebookFile, "'
-    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t', ROWTERMINATOR = '\r\n')
+    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t', ROWTERMINATOR = '\n')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
+print("first bulk didn't fail")
 
 #TODO: make this table more comprehensive, to invlude suffixes as well as prefixes
 # create the ExcludedTables table in SQL
@@ -93,7 +96,9 @@ insertStatement = paste(sep="", "
     WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
+
 SqlTools::dbSendUpdate(cn, insertStatement)
+print("second bulk didn't fail")
 
 # shrink transaction log
 SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
@@ -108,8 +113,10 @@ SqlTools::dbSendUpdate(cn, "
     CREATE TABLE ##tmp_nhanes_tables (
         [Table] varchar(64),
         TableName varchar(1024),
+        BeginYear int,
+        EndYear int,
         DataGroup varchar(64),
-        Year int
+        UseConstraints varchar(64)
     )
 ")
 
@@ -120,19 +127,23 @@ insertStatement = paste(sep="", "
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
+print("third bulk didn't fail")
 
 # As of v0.0.2, the nhanes_tables.tsv file includes doublequotes in the values. These lines replace them. 
 SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [Table] = REPLACE([Table], CHAR(34), '')")
 SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [TableName] = REPLACE([TableName], CHAR(34), '')")
 SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [DataGroup] = REPLACE([DataGroup], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [UseConstraints] = REPLACE([UseConstraints], CHAR(34), '')")
 
 # clean up and insert in new table with consistent nomenclature
 SqlTools::dbSendUpdate(cn, "
     SELECT 
         T.TableName AS Description,
-        T.DataGroup,
         Q.TableName,
-        T.Year
+        T.BeginYear,
+        T.EndYear,
+        T.DataGroup,
+        T.UseConstraints
     INTO NhanesLandingZone.Metadata.QuestionnaireDescriptions
     FROM 
         ##tmp_nhanes_tables T 
@@ -140,9 +151,11 @@ SqlTools::dbSendUpdate(cn, "
             T.[Table] = Q.TableName
     GROUP BY
         T.TableName,
-        T.DataGroup,
         Q.TableName,
-        T.Year
+        T.BeginYear,
+        T.EndYear,
+        T.DataGroup,
+        T.UseConstraints
 ")
 
 SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_tables")
@@ -164,10 +177,24 @@ SqlTools::dbSendUpdate(cn, "
         SASLabel varchar(64),
         EnglishText varchar(1024),
         Target varchar(128),
+        UseConstraints varchar(128),
         ProcessedText varchar(1024),
-        Tags varchar(128)
+        Tags varchar(1024)
     )
 ")
+
+# SqlTools::dbSendUpdate(cn, "
+#     CREATE TABLE ##tmp_nhanes_variables (
+#         Variable varchar(64),
+#         [Table] varchar(64),
+#         SASLabel varchar(64),
+#         EnglishText varchar(1024),
+#         Target varchar(128),
+#         UseConstraints varchar(128),
+#         ProcessedText varchar(1024),
+#         Tags varchar(1024)
+#     )
+# ")
 
 # run bulk insert
 insertStatement = paste(sep="", "
@@ -176,6 +203,7 @@ insertStatement = paste(sep="", "
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
+print("fourth bulk didn't fail")
 
 # add columns to QuestionnaireVariables table to accommodate additional data
 SqlTools::dbSendUpdate(cn, "
@@ -183,7 +211,8 @@ SqlTools::dbSendUpdate(cn, "
     ADD 
         Description varchar(1024) NULL, 
         Target varchar(128) NULL,
-        SasLabel varchar(64)
+        SasLabel varchar(64),
+        UseConstraints varchar(64)
 ")
 
 # update the new columns in the NhanesLandingZone.dbo.QuestionnaireVariables
@@ -193,12 +222,14 @@ SqlTools::dbSendUpdate(cn, "
     SET 
         Q.Description = V.EnglishText,
         Q.Target = V.Target,
-        Q.SasLabel = V.SasLabel
+        Q.SasLabel = V.SasLabel,
+        Q.UseConstraints = V.UseConstraints
     FROM 
         NhanesLandingZone.Metadata.QuestionnaireVariables Q
         INNER JOIN ##tmp_nhanes_variables V ON
             Q.TableName = V.[Table]
             AND Q.Variable = V.Variable
+            AND Q.UseConstraints = V.UseConstraints
 ")
 
 SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_variables")
