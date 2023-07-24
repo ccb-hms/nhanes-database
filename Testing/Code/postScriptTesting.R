@@ -74,7 +74,7 @@ pattern <- "^v(0|[1-9]|[1-9][0-9]|100)\\.(0|[1-9]|[1-9][0-9]|100)\\.(0|[1-9]|[1-
 
 
 mismatchedCols <- function(cols, tableName){
-        query = setequal(cols, unlist(DBI::dbGetQuery(cn, paste("SELECT DISTINCT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='",cols,"'", sep='')))), 
+        query = setequal(cols, unlist(DBI::dbGetQuery(cn, paste("SELECT DISTINCT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='",tableName,"' AND TABLE_CATALOG='NhanesLandingZone'", sep=''))))
         if(!query){
                     result = paste("Mismatched Columns Found in", tableName)
                     return(result)
@@ -83,32 +83,31 @@ mismatchedCols <- function(cols, tableName){
 }
 
 DownloadErrors = c("DataType", "FileUrl", "Error")
-mismatchedCols(DownloadErrors,"[NhanesLandingZone].[Metadata].[DownloadErrors]")
+mismatchedCols(DownloadErrors,"DownloadErrors")
 
-QuestionnaireDescriptions = c("Description", "DataGroup", "TableName", "Year")
-mismatchedCols(QuestionnaireDescriptions, "[NhanesLandingZone].[Metadata].[QuestionnaireDescriptions]")
+QuestionnaireDescriptions = c("Description", "TableName", "BeginYear", "EndYear", "DataGroup", "UseConstraints")
+mismatchedCols(QuestionnaireDescriptions, "QuestionnaireDescriptions")
 
-QuestionnaireVariables = c("Variable", "TableName", "Description", "Target", "SasLabel")
-mismatchedCols(QuestionnaireVariables, "[NhanesLandingZone].[Metadata].[QuestionnaireVariables]")
+QuestionnaireVariables = c("Variable", "TableName", "Description", "Target", "SasLabel", "UseConstraints")
+mismatchedCols(QuestionnaireVariables, "QuestionnaireVariables")
 
 VariableCodebook = c("Variable", "TableName", "CodeOrValue", "ValueDescription", "Count", "Cumulative", "SkipToItem")
-mismatchedCols(VariableCodebook, unlist(DBI::dbGetQuery(cn, "SELECT DISTINCT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='VariableCodebook'"))), "[NhanesLandingZone].[Metadata].[VariableCodebook]")
+mismatchedCols(VariableCodebook, "VariableCodebook")
 
 dbxrefs = c("Subject", "Object", "Ontology")
-mismatchedCols(dbxrefs, , "[NhanesLandingZone].[Ontology].[dbxrefs]")
+mismatchedCols(dbxrefs, "dbxrefs")
 
 edges = c("Subject", "Object", "Ontology")
-mismatchedCols(edges, "[NhanesLandingZone].[Ontology].[edges]")
+mismatchedCols(edges, "edges")
 
 entailed_edges = c("Subject", "Object", "Ontology")
-mismatchedCols(entailed_edges, "[NhanesLandingZone].[Ontology].[entailed_edges]")
+mismatchedCols(entailed_edges, "entailed_edges")
 
 labels = c("Subject", "Object", "IRI", "Ontology", "Direct", "Inherited")
-mismatchedCols(labels, "[NhanesLandingZone].[Ontology].[labels]")
+mismatchedCols(labels, "labels")
 
 nhanes_variables_mappings = c("Variable", "TableName", "SourceTermID", "SourceTerm", "MappedTermLabel", "MappedTermCURIE", "MappedTermIRI", "MappingScore", "Tags", "Ontology")
-mismatchedCols(nhanes_variables_mappings, "[NhanesLandingZone].[Ontology].[nhanes_variables_mappings]")
-
+mismatchedCols(nhanes_variables_mappings, "nhanes_variables_mappings")
 
 ##################################################################################################################
 # TEST: All tables in questionnaire descriptions are present in the db
