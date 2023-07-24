@@ -23,8 +23,6 @@ sqlUserName = "sa"
 sqlPassword = "yourStrong(!)Password"
 sqlDefaultDb = "NhanesLandingZone"
 
-print("starting")
-
 # loop waiting for SQL Server database to become available
 for (i in 1:60) {
     cn = tryCatch(
@@ -79,7 +77,6 @@ insertStatement = paste(sep="", "
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
-print("first bulk didn't fail")
 
 #TODO: make this table more comprehensive, to invlude suffixes as well as prefixes
 # create the ExcludedTables table in SQL
@@ -98,7 +95,6 @@ insertStatement = paste(sep="", "
 
 
 SqlTools::dbSendUpdate(cn, insertStatement)
-print("second bulk didn't fail")
 
 # shrink transaction log
 SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
@@ -127,7 +123,6 @@ insertStatement = paste(sep="", "
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
-print("third bulk didn't fail")
 
 # As of v0.0.2, the nhanes_tables.tsv file includes doublequotes in the values. These lines replace them. 
 SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [Table] = REPLACE([Table], CHAR(34), '')")
@@ -203,7 +198,6 @@ insertStatement = paste(sep="", "
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
-print("fourth bulk didn't fail")
 
 # add columns to QuestionnaireVariables table to accommodate additional data
 SqlTools::dbSendUpdate(cn, "
