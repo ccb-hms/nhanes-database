@@ -46,19 +46,8 @@ suppressWarnings({
 m = DBI::dbGetQuery(cn, "
                         SELECT DISTINCT(TABLE_NAME)
                         FROM INFORMATION_SCHEMA.TABLES
-                        WHERE 
-                            TABLE_TYPE = 'BASE TABLE' 
-                            AND TABLE_CATALOG='NhanesLandingZone'
-                            AND TABLE_NAME != 'QuestionnaireVariables'
-                            AND TABLE_NAME != 'DownloadErrors'
-                            AND TABLE_NAME != 'VariableCodebook'
-                            AND TABLE_NAME != 'QuestionnaireDescriptions'
-                            AND TABLE_NAME != 'dbxrefs'
-                            AND TABLE_NAME != 'entailed_edges'
-                            AND TABLE_NAME != 'edges'
-                            AND TABLE_NAME != 'labels'
-                            AND TABLE_NAME != 'nhanes_variables_mappings'
-                            AND TABLE_NAME != 'ExcludedTables'
+                        WHERE TABLE_CATALOG='NhanesLandingZone'
+                        AND TABLE_SCHEMA = 'Raw'
                         ORDER BY TABLE_NAME ASC
                         ")
 
@@ -85,7 +74,7 @@ pattern <- "^v(0|[1-9]|[1-9][0-9]|100)\\.(0|[1-9]|[1-9][0-9]|100)\\.(0|[1-9]|[1-
 
 
 mismatchedCols <- function(cols, tableName){
-        query = setequal(cols, unlist(DBI::dbGetQuery(cn, paste("SELECT DISTINCT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='",cols,"'", sep='')))), 
+        query = setequal(cols, unlist(DBI::dbGetQuery(cn, paste("SELECT DISTINCT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='",tableName,"' AND TABLE_CATALOG='NhanesLandingZone'", sep=''))))
         if(!query){
                     result = paste("Mismatched Columns Found in", tableName)
                     return(result)
@@ -94,45 +83,44 @@ mismatchedCols <- function(cols, tableName){
 }
 
 DownloadErrors = c("DataType", "FileUrl", "Error")
-mismatchedCols(DownloadErrors,"[NhanesLandingZone].[Metadata].[DownloadErrors]")
+mismatchedCols(DownloadErrors,"DownloadErrors")
 
-QuestionnaireDescriptions = c("Description", "DataGroup", "TableName", "Year")
-mismatchedCols(QuestionnaireDescriptions, "[NhanesLandingZone].[Metadata].[QuestionnaireDescriptions]")
+QuestionnaireDescriptions = c("Description", "TableName", "BeginYear", "EndYear", "DataGroup", "UseConstraints")
+mismatchedCols(QuestionnaireDescriptions, "QuestionnaireDescriptions")
 
-QuestionnaireVariables = c("Variable", "TableName", "Description", "Target", "SasLabel")
-mismatchedCols(QuestionnaireVariables, "[NhanesLandingZone].[Metadata].[QuestionnaireVariables]")
+QuestionnaireVariables = c("Variable", "TableName", "Description", "Target", "SasLabel", "UseConstraints")
+mismatchedCols(QuestionnaireVariables, "QuestionnaireVariables")
 
 VariableCodebook = c("Variable", "TableName", "CodeOrValue", "ValueDescription", "Count", "Cumulative", "SkipToItem")
-mismatchedCols(VariableCodebook, unlist(DBI::dbGetQuery(cn, "SELECT DISTINCT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='VariableCodebook'"))), "[NhanesLandingZone].[Metadata].[VariableCodebook]")
+mismatchedCols(VariableCodebook, "VariableCodebook")
 
 dbxrefs = c("Subject", "Object", "Ontology")
-mismatchedCols(dbxrefs, , "[NhanesLandingZone].[Ontology].[dbxrefs]")
+mismatchedCols(dbxrefs, "dbxrefs")
 
 edges = c("Subject", "Object", "Ontology")
-mismatchedCols(edges, "[NhanesLandingZone].[Ontology].[edges]")
+mismatchedCols(edges, "edges")
 
 entailed_edges = c("Subject", "Object", "Ontology")
-mismatchedCols(entailed_edges, "[NhanesLandingZone].[Ontology].[entailed_edges]")
+mismatchedCols(entailed_edges, "entailed_edges")
 
 labels = c("Subject", "Object", "IRI", "Ontology", "Direct", "Inherited")
-mismatchedCols(labels, "[NhanesLandingZone].[Ontology].[labels]")
+mismatchedCols(labels, "labels")
 
 nhanes_variables_mappings = c("Variable", "TableName", "SourceTermID", "SourceTerm", "MappedTermLabel", "MappedTermCURIE", "MappedTermIRI", "MappingScore", "Tags", "Ontology")
-mismatchedCols(nhanes_variables_mappings, "[NhanesLandingZone].[Ontology].[nhanes_variables_mappings]")
-
+mismatchedCols(nhanes_variables_mappings, "nhanes_variables_mappings")
 
 ##################################################################################################################
 # TEST: All tables in questionnaire descriptions are present in the db
 # RESULT: Returns any tables in QuestionnaireDescriptions not found in 'Raw' schema, should be empty result otherwise
 ##################################################################################################################
 
-#TODO
 questionnaireToRaw = "
                     SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'Raw'
+                    AND TABLE_CATALOG='NhanesLandingZone'
                     AND TABLE_NAME NOT IN ( SELECT TableName FROM Metadata.QuestionnaireDescriptions )
+                    AND TABLE_NAME NOT IN ( SELECT TableName FROM Metadata.ExcludedTables )
+                    AND TABLE_NAME NOT LIKE '%P_%'
                     ORDER BY TABLE_NAME ASC
-                    # this test should fail when the result of this query contains something other than the excluded files tables
-                    # and anything that looks liek the pandemic files in the download errors tables (not like %P_%)
                     "
 
 SqlTools::dbSendUpdate(cn, questionnaireToRaw) # returns an integer of result len
@@ -143,16 +131,7 @@ SqlTools::dbSendUpdate(cn, questionnaireToRaw) # returns an integer of result le
 # RESULT: Returns a dataframe with the tables and columns that have >10% null values
 ##################################################################################################################
 
-#TODO: count nulls in each column in each table, compare against translated version
-
 # create an empty dataframe
-
-# for each table, if it has a SEQN column, 
-# do row count test first, if they're equal then no need for second test
-# compare the SEQN and columns in both tables, they should be both equal, never one null and the other not
-# if row counts don't match up, then do an inner join to see where the SEQN col is messed up on both sides
-
-
 df <- setNames(data.frame(matrix(ncol = 2, nrow = 0)), c("TableColumn", "NullPercent"))
 
 # loop through each table in the 'Raw' schema
@@ -165,35 +144,30 @@ for (i in 1:nrow(m)) {
         cn, 
         paste(
             sep="", 
-            "SELECT DISTINCT(COLUMN_NAME), TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='", currTableName, "'", " AND TABLE_SCHEMA = 'Raw'")
+            "SELECT DISTINCT(COLUMN_NAME), TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='", currTableName, "'", " AND TABLE_CATALOG='NhanesLandingZone' AND TABLE_SCHEMA = 'Raw'")
         )
     
-    nullPercentQuery = "SELECT "
-    
-    # loop through each column name
-    for (j in 1:nrow(tableCols)) {
-        
-        columnName = tableCols[j, "COLUMN_NAME"]
-        
-        # appends a select statement to nullPercentQuery, building a single query to return a table
-        # that contains each column and it's null percentage
-        nullPercentQuery = paste(sep="",nullPercentQuery, "100.0 * SUM(CASE WHEN [", columnName, "] IS NULL THEN 1 ELSE 0 END) / COUNT(*) AS ", currTableName, "_", columnName, "_NullPercent,")
-    
+    # check if the table has a SEQN column. If it does, proceed to the row count test
+    if (sum(str_detect(tableCols$COLUMN_NAME, "SEQN")) > 0){}
+
+        # Compare the row counts between the Raw and Translated versions of the table. If they are not equal, keep going to compare each column against SEQN individually
+        rowCountQuery = paste(sep="", "SELECT CASE WHEN (select count(*) from [NhanesLandingZone].[Raw].[", currTableName, "])=(select count(*) from [NhanesLandingZone].[Translated].[", currTableName, "]) THEN 1 ELSE 0 END AS RowCountResult")
+
+        rowCountResult = DBI::dbGetQuery(cn, rowCountQuery)[,]
+
+        if (rowCountResult != 1){
+            for (j in 1:nrow(tableCols)) {
+
+                columnName = tableCols[j, "COLUMN_NAME"]
+                
+                # compare the columns in both tables, they should be both equal, never one null and the other not
+                compareColumns = paste(sep="", "SELECT R.SEQN, T.SEQN, R.",columnName,", T.",columnName," FROM [RAW].[",currTableName,"] R INNER JOIN Translated.",currTableName," T ON R.SEQN = T.SEQN WHERE (R.",columnName," IS NOT NULL AND T.",columnName," IS NULL) OR (R.",columnName," IS NULL AND T.",columnName," IS NOT NULL)")
+                
+                compareColumnsResult = DBI::dbGetQuery(cn, compareColumns)[,]
+            
+                }
+        }
     }
-    # removes the last comma from the query
-    nullPercentQuery = str_sub(nullPercentQuery, end = -2)
-    
-    # adds the target table to the query
-    nullPercentQuery = paste(sep="",nullPercentQuery, " FROM [NhanesLandingZone].[Raw].[",currTableName,"]")
-    
-    nullPercentColumns = DBI::dbGetQuery(cn, nullPercentQuery)
-    
-    for (k in 1:length(nullPercentColumns)) {
-        
-        nullVal = nullPercentColumns[,k]
-        if (nullVal>10) {df[nrow(df) + 1,] <- list(names(nullPercentColumns[k]), nullPercentColumns[k])}
-    }
-}
 
 
 ##################################################################################################################
@@ -201,12 +175,11 @@ for (i in 1:nrow(m)) {
 # RESULT: Returns any table names in the raw schema not found in the translated schema, should be empty otherwise
 ##################################################################################################################
 
-#TODO: catalog required is NHANESlandingzone, for all interrogations
-#TODO: assert that nrows(raw) == nrows(translated)
 rawToTranslated = "
                     SELECT TABLE_NAME
                     FROM INFORMATION_SCHEMA.TABLES
                     WHERE TABLE_SCHEMA = 'Raw' 
+                    AND TABLE_CATALOG='NhanesLandingZone'
                     AND TABLE_NAME NOT IN ( SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'Translated' )
                     ORDER BY TABLE_NAME ASC
                     "
@@ -227,8 +200,6 @@ for (i in 1:nrow(m)) {
         cn, 
         paste(
             sep="", 
-            "SELECT COLUMN_NAME, TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME LIKE '", currTableName, "' AND TABLE_SCHEMA = 'Raw' AND COLUMN_NAME NOT IN ( SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME LIKE '", currTableName, "' AND TABLE_SCHEMA = 'Translated' )" 
-        )
-
-    # what to do when we find the missing columns?
+            "SELECT COLUMN_NAME, TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME LIKE '", currTableName, "' AND TABLE_SCHEMA = 'Raw' AND TABLE_CATALOG='NhanesLandingZone' AND COLUMN_NAME NOT IN ( SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME LIKE '", currTableName, "' AND TABLE_SCHEMA = 'Translated' )" 
+        ))
 }
