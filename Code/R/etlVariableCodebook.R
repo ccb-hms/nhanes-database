@@ -174,22 +174,12 @@ SqlTools::dbSendUpdate(cn, "
         Target varchar(128),
         UseConstraints varchar(128),
         ProcessedText varchar(1024),
-        Tags varchar(1024)
+        Tags varchar(1024),
+        VariableID varchar(1024),
+        OntologyMapped varchar(1024)
     )
 ")
 
-# SqlTools::dbSendUpdate(cn, "
-#     CREATE TABLE ##tmp_nhanes_variables (
-#         Variable varchar(64),
-#         [Table] varchar(64),
-#         SASLabel varchar(64),
-#         EnglishText varchar(1024),
-#         Target varchar(128),
-#         UseConstraints varchar(128),
-#         ProcessedText varchar(1024),
-#         Tags varchar(1024)
-#     )
-# ")
 
 # run bulk insert
 insertStatement = paste(sep="", "
@@ -206,7 +196,11 @@ SqlTools::dbSendUpdate(cn, "
         Description varchar(1024) NULL, 
         Target varchar(128) NULL,
         SasLabel varchar(64),
-        UseConstraints varchar(64)
+        UseConstraints varchar(64),
+        ProcessedText varchar(1024),
+        Tags varchar(1024),
+        VariableID varchar(1024),
+        OntologyMapped varchar(1024)
 ")
 
 # update the new columns in the NhanesLandingZone.dbo.QuestionnaireVariables
@@ -217,13 +211,16 @@ SqlTools::dbSendUpdate(cn, "
         Q.Description = V.EnglishText,
         Q.Target = V.Target,
         Q.SasLabel = V.SasLabel,
-        Q.UseConstraints = V.UseConstraints
+        Q.UseConstraints = V.UseConstraints,
+        Q.ProcessedText = V.ProcessedText,
+        Q.Tags = V.Tags,
+        Q.VariableID = V.VariableID,
+        Q.OntologyMapped = V.OntologyMapped    
     FROM 
         NhanesLandingZone.Metadata.QuestionnaireVariables Q
         INNER JOIN ##tmp_nhanes_variables V ON
             Q.TableName = V.[Table]
             AND Q.Variable = V.Variable
-            AND Q.UseConstraints = V.UseConstraints
 ")
 
 SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_variables")

@@ -341,40 +341,33 @@ RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /tmp/NHANES-metadata
 
 RUN git fetch --tags
-RUN git checkout tags/v3.3.1
-
-# Old code (line 351 stop)
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-	&& Rscript /NHANES/etlVariableCodebook.R
+RUN git checkout tags/v3.4.0
 	
-# install packages, which require newer version of rvest in conflict with the download / build script
-RUN Rscript -e "remotes::install_version('nhanesA', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.7.1')"
-RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
-
-# Rafael/Jason Code Implementation
+# # Rafael/Jason Code Implementation # # 
 # RUN python3.9 -m pip install pydantic==1.7
 # RUN python3.9 -m pip install pandas==2.0.2
 # RUN python3.9 -m pip install Owlready2==0.40
 # RUN python3.9 -m pip install text2term==2.3.2
+###############################################
 
-# # install packages, which require newer version of rvest in conflict with the download / build script
-# RUN Rscript -e "remotes::install_version('nhanesA', repos='https://packagemanager.posit.co/cran/__linux__/focal/2023-07-18/', upgrade=TRUE, version='0.7.4')"
-# RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
+# install packages, which require newer version of rvest in conflict with the download / build script
+RUN Rscript -e "remotes::install_version('nhanesA', repos='https://packagemanager.posit.co/cran/__linux__/focal/2023-07-18/', upgrade=TRUE, version='0.7.4')"
+RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
 
+# # Rafael/Jason Code Implementation # #
 # WORKDIR /tmp/NHANES-metadata/code
 
 # RUN Rscript get_nhanes_metadata.R
 
-# RUN chmod +x run_nhanes_utilities.sh
-# RUN ./run_nhanes_utilities.sh
 # RUN python3.9 generate_ontology_tables.py
 # RUN python3.9 generate_ontology_mappings.py
 # RUN python3.9 generate_nhanes_mapping_report.py
+#################################################
 
-# # WORKDIR /tmp/NHANES-metadata
+WORKDIR /tmp/NHANES-metadata
 
-# # RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-# # 	&& Rscript /NHANES/etlVariableCodebook.R
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/etlVariableCodebook.R
 
 # translate the coded responses
 COPY Code/Sql/spTranslateTable.sql /NHANES/spTranslateTable.sql
