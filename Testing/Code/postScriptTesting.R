@@ -88,7 +88,7 @@ mismatchedCols(DownloadErrors,"DownloadErrors")
 QuestionnaireDescriptions = c("Description", "TableName", "BeginYear", "EndYear", "DataGroup", "UseConstraints")
 mismatchedCols(QuestionnaireDescriptions, "QuestionnaireDescriptions")
 
-QuestionnaireVariables = c("Variable", "TableName", "Description", "Target", "SasLabel", "UseConstraints")
+QuestionnaireVariables = c("Variable", "TableName", "Description", "Target", "SasLabel", "UseConstraints","ProcessedText","Tags","VariableID","OntologyMapped")
 mismatchedCols(QuestionnaireVariables, "QuestionnaireVariables")
 
 VariableCodebook = c("Variable", "TableName", "CodeOrValue", "ValueDescription", "Count", "Cumulative", "SkipToItem")
@@ -123,12 +123,12 @@ questionnaireToRaw = "
                     ORDER BY TABLE_NAME ASC
                     "
 
-SqlTools::dbSendUpdate(cn, questionnaireToRaw) # returns an integer of result len
+DBI::dbGetQuery(cn, questionnaireToRaw) # returns any tables found
 
 
 ##################################################################################################################
-# TEST: all tables have < 10 % null values
-# RESULT: Returns a dataframe with the tables and columns that have >10% null values
+# TEST: Raw and Translated tables have the same row counts
+# RESULT: 
 ##################################################################################################################
 
 # create an empty dataframe
@@ -154,7 +154,6 @@ for (i in 1:nrow(m)) {
         rowCountQuery = paste(sep="", "SELECT CASE WHEN (select count(*) from [NhanesLandingZone].[Raw].[", currTableName, "])=(select count(*) from [NhanesLandingZone].[Translated].[", currTableName, "]) THEN 1 ELSE 0 END AS RowCountResult")
 
         rowCountResult = DBI::dbGetQuery(cn, rowCountQuery)[,]
-
         if (rowCountResult != 1){
             for (j in 1:nrow(tableCols)) {
 
@@ -164,7 +163,7 @@ for (i in 1:nrow(m)) {
                 compareColumns = paste(sep="", "SELECT R.SEQN, T.SEQN, R.",columnName,", T.",columnName," FROM [RAW].[",currTableName,"] R INNER JOIN Translated.",currTableName," T ON R.SEQN = T.SEQN WHERE (R.",columnName," IS NOT NULL AND T.",columnName," IS NULL) OR (R.",columnName," IS NULL AND T.",columnName," IS NOT NULL)")
                 
                 compareColumnsResult = DBI::dbGetQuery(cn, compareColumns)[,]
-            
+
                 }
         }
     }
