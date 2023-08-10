@@ -262,6 +262,7 @@ RUN Rscript -e "remotes::install_cran('reshape2')"
 RUN Rscript -e "remotes::install_cran('jsonlite')"
 RUN Rscript -e "remotes::install_cran('viridis')"
 RUN Rscript -e "remotes::install_cran('optparse')"
+RUN Rscript -e "remotes::install_cran('nhanesA')"
 
 # need old version of rvest in order for the hack that parses URLs to work in the NHANES download script
 RUN Rscript -e "remove.packages('rvest')"
@@ -337,28 +338,36 @@ RUN apt-get update \
 		python3-pip
 
 RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
-
 WORKDIR /tmp/NHANES-metadata
-RUN git checkout v3.2.0
 
-RUN python3.9 -m pip install pydantic==1.7
-RUN python3.9 -m pip install pandas==1.5.3
-RUN python3.9 -m pip install Owlready2
-RUN python3.9 -m pip install text2term==2.3.2
+RUN git fetch --tags
+RUN git checkout tags/v3.4.0
+	
+# # Rafael/Jason Code Implementation # # 
+# RUN python3.9 -m pip install pydantic==1.7
+# RUN python3.9 -m pip install pandas==2.0.2
+# RUN python3.9 -m pip install Owlready2==0.40
+# RUN python3.9 -m pip install text2term==2.3.2
+###############################################
 
-WORKDIR /tmp/NHANES-metadata/code
+# install packages, which require newer version of rvest in conflict with the download / build script
+RUN Rscript -e "remotes::install_version('nhanesA', repos='https://packagemanager.posit.co/cran/__linux__/focal/2023-07-18/', upgrade=TRUE, version='0.7.4')"
+RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
 
-RUN python3.9 preprocess_metadata.py
-RUN python3.9 generate_ontology_mappings.py
+# # Rafael/Jason Code Implementation # #
+# WORKDIR /tmp/NHANES-metadata/code
+
+# RUN Rscript get_nhanes_metadata.R
+
+# RUN python3.9 generate_ontology_tables.py
+# RUN python3.9 generate_ontology_mappings.py
+# RUN python3.9 generate_nhanes_mapping_report.py
+#################################################
 
 WORKDIR /tmp/NHANES-metadata
 
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
-
-# install packages, which require newer version of rvest in conflict with the download / build script
-RUN Rscript -e "remotes::install_version('nhanesA', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.7.1')"
-RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
 
 # translate the coded responses
 COPY Code/Sql/spTranslateTable.sql /NHANES/spTranslateTable.sql
@@ -376,7 +385,7 @@ WORKDIR /NHANES
 
 # Declare which version of the container this is, and make it available inside the container 
 ENV EPICONDUCTOR_CONTAINER_VERSION staging-v0.0.5
-ENV EPICONDUCTOR_COLLECTION_DATE 2023-06-30
+ENV EPICONDUCTOR_COLLECTION_DATE 2023-07-24
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
