@@ -72,7 +72,6 @@ pattern <- "^v(0|[1-9]|[1-9][0-9]|100)\\.(0|[1-9]|[1-9][0-9]|100)\\.(0|[1-9]|[1-
 # RESULT: All of the following setequal lines should return TRUE. A FALSE return means there are mismatched columns
 ##################################################################################################################
 
-
 mismatchedCols <- function(cols, tableName){
         query = setequal(cols, unlist(DBI::dbGetQuery(cn, paste("SELECT DISTINCT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='",tableName,"' AND TABLE_CATALOG='NhanesLandingZone'", sep=''))))
         if(!query){
@@ -114,6 +113,10 @@ mismatchedCols(nhanes_variables_mappings, "nhanes_variables_mappings")
 # RESULT: Returns any tables in QuestionnaireDescriptions not found in 'Raw' schema, should be empty result otherwise
 ##################################################################################################################
 
+# NP_REVIEW:
+# I think this is doing the opposite of what the comment says, it's identifying RAW tables that do not have
+# an entry in QuestionnaireDescriptions or ExcludedTables
+
 questionnaireToRaw = "
                     SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'Raw'
                     AND TABLE_CATALOG='NhanesLandingZone'
@@ -133,6 +136,9 @@ DBI::dbGetQuery(cn, questionnaireToRaw) # returns any tables found
 
 # create an empty dataframe
 df <- setNames(data.frame(matrix(ncol = 2, nrow = 0)), c("TableColumn", "NullPercent"))
+
+# NP_REVIEW:
+# I don't see where the following loop throws an error or otherwise notifies the user of inconsistencies
 
 # loop through each table in the 'Raw' schema
 for (i in 1:nrow(m)) {
@@ -191,6 +197,8 @@ DBI::dbGetQuery(cn, rawToTranslated)
 # RESULT: Returns any cols in 'raw' that don't appear in the 'translated' version for each table
 ##################################################################################################################
 
+# NP_REVIEW:
+# Again, this isn't raising any error or message when an inconsistency is found
 for (i in 1:nrow(m)) {
 
     currTableName = m[i,"TABLE_NAME"]
