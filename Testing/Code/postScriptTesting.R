@@ -1,6 +1,11 @@
 # postScriptTesting.R
 # Tests to be run post-build on the NHANES db to verify completion and consistency in the data.
 
+# NP_REVIEW:
+# We need to modify each of these tests to do some combination of:
+#   -throw an error
+#   -write errors to log
+
 library(glue)
 library(stringr)
 
@@ -137,9 +142,6 @@ DBI::dbGetQuery(cn, questionnaireToRaw) # returns any tables found
 # create an empty dataframe
 df <- setNames(data.frame(matrix(ncol = 2, nrow = 0)), c("TableColumn", "NullPercent"))
 
-# NP_REVIEW:
-# I don't see where the following loop throws an error or otherwise notifies the user of inconsistencies
-
 # loop through each table in the 'Raw' schema
 for (i in 1:nrow(m)) {
     
@@ -197,8 +199,6 @@ DBI::dbGetQuery(cn, rawToTranslated)
 # RESULT: Returns any cols in 'raw' that don't appear in the 'translated' version for each table
 ##################################################################################################################
 
-# NP_REVIEW:
-# Again, this isn't raising any error or message when an inconsistency is found
 for (i in 1:nrow(m)) {
 
     currTableName = m[i,"TABLE_NAME"]
