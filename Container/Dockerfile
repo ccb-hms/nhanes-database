@@ -384,7 +384,7 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 WORKDIR /NHANES
 
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION staging-v0.0.5
+ENV EPICONDUCTOR_CONTAINER_VERSION 0.0.5
 ENV EPICONDUCTOR_COLLECTION_DATE 2023-07-24
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
