@@ -173,14 +173,14 @@ AS
         SELECT 
             T.' + @pkColName + ',
             T.Variable,
-            COALESCE(CAST(V.ValueDescription AS VARCHAR), CAST(T.Response AS VARCHAR)) AS ValueDescription
+            COALESCE(CAST(V.ValueDescription AS VARCHAR(MAX)), CAST(T.Response AS VARCHAR(MAX))) AS ValueDescription
         INTO 
             ' + @TranslatedTempTableName + '
         FROM 
             ' + @UnpivotTempTableName + ' T 
             LEFT OUTER JOIN Metadata.VariableCodebook V ON 
                 T.Variable = V.Variable 
-                AND CAST(T.Response AS VARCHAR) = CAST(V.CodeOrValue AS VARCHAR)
+                AND CAST(T.Response AS VARCHAR(MAX)) = CAST(V.CodeOrValue AS VARCHAR(MAX))
                 AND V.TableName = ''' + @SourceTableName + '''        
     '
     
