@@ -73,7 +73,7 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT NhanesLandingZone.Metadata.VariableCodebook FROM '", codebookFile, "'
-    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t', ROWTERMINATOR = '\n')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t', ROWTERMINATOR = '\n')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
