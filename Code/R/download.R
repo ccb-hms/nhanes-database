@@ -397,7 +397,7 @@ if (!opt[["include-exclusions"]]) {
       )
       SqlTools::dbSendUpdate(cn, insertStatement)
 
-} else{
+} else {
       # generate file name for temporary output
       currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
 
@@ -421,52 +421,52 @@ if (!opt[["include-exclusions"]]) {
                               "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
       )
       SqlTools::dbSendUpdate(cn, insertStatement)
- }
+}
 
-  # issue checkpoint
-  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-  # shrink transaction log
-  SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
-  # issue checkpoint
-  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-  if (!opt[["include-exclusions"]]) {
-  # create a table to hold records of the failed file downloads
-  SqlTools::dbSendUpdate(cn, "CREATE TABLE Metadata.DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
+if (!opt[["include-exclusions"]]) {
+# create a table to hold records of the failed file downloads
+SqlTools::dbSendUpdate(cn, "CREATE TABLE Metadata.DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
 
-  # generate file name for temporary output
-  currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
+# generate file name for temporary output
+currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
 
-  # write failed file downloads table to disk
-  write.table(
-    downloadErrors,
-    file = currOutputFileName,
-    sep = "\t",
-    na = "",
-    append=TRUE,
-    row.names = FALSE,
-    col.names = FALSE,
-    quote = FALSE
-  )
+# write failed file downloads table to disk
+write.table(
+  downloadErrors,
+  file = currOutputFileName,
+  sep = "\t",
+  na = "",
+  append=TRUE,
+  row.names = FALSE,
+  col.names = FALSE,
+  quote = FALSE
+)
 
-  # issue BULK INSERT
-  insertStatement = paste(sep="",
-                          "BULK INSERT ",
-                          "Metadata.DownloadErrors",
-                          " FROM '",
-                          currOutputFileName,
-                          "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-  )
+# issue BULK INSERT
+insertStatement = paste(sep="",
+                        "BULK INSERT ",
+                        "Metadata.DownloadErrors",
+                        " FROM '",
+                        currOutputFileName,
+                        "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+)
 
-  SqlTools::dbSendUpdate(cn, insertStatement)
+SqlTools::dbSendUpdate(cn, insertStatement)
 
-  # shrink transaction log
-  SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
-  # issue checkpoint
-  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-  # issue checkpoint
-  SqlTools::dbSendUpdate(cn, "SHUTDOWN")
+# shutdown the database engine cleanly
+SqlTools::dbSendUpdate(cn, "SHUTDOWN")
