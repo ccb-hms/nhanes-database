@@ -331,3 +331,6 @@ SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
+# shutdown the database engine cleanly
+SqlTools::dbSendUpdate(cn, "SHUTDOWN")
