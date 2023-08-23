@@ -376,12 +376,11 @@ WORKDIR /NHANES
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/stageSprocs.R
 
+# run the script to translate the raw coded tables
 COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
 WORKDIR /NHANES
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/translateRawTables.R
-
-WORKDIR /NHANES
 
 # Declare which version of the container this is, and make it available inside the container 
 ENV EPICONDUCTOR_CONTAINER_VERSION 0.0.5
