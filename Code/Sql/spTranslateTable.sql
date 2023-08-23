@@ -262,6 +262,7 @@ AS
     -- create a clustered index on the destination table with compression
     DECLARE @IndexStmt varchar(8000)
     SET @IndexStmt = 'CREATE CLUSTERED COLUMNSTORE INDEX ccix ON ' + @DestinationTableSchema + '.' + @DestinationTableName
+    EXEC(@IndexStmt)
 
     -- debugging
     -- EXEC('SELECT TOP 5 * FROM ' + @DestinationTableSchema + '.' + @DestinationTableName + ' ORDER BY SEQN')
@@ -272,3 +273,5 @@ AS
     EXEC(@GarbageCollectionStmt)
     SET @GarbageCollectionStmt = 'DROP TABLE IF EXISTS ' + @TranslatedTempTableName
     EXEC(@GarbageCollectionStmt)
+    
+    CHECKPOINT
