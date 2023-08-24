@@ -328,7 +328,6 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awai
 	
 # run the ETL process to load variable metadata
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
-COPY Code/R/createQuestionnaireViews.R /NHANES/createQuestionnaireViews.R
 WORKDIR /tmp
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
