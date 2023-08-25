@@ -323,12 +323,11 @@ ARG ACCEPT_EULA=Y
 ARG SA_PASSWORD=yourStrong(!)Password
 
 # run the download and database build
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awaiting server bootup" && sleep 15 && echo "lets try to logon"  && /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P ${SA_PASSWORD})' \
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/download.R --container-build=TRUE
 	
 # run the ETL process to load variable metadata
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
-COPY Code/R/createQuestionnaireViews.R /NHANES/createQuestionnaireViews.R
 WORKDIR /tmp
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -376,15 +375,14 @@ WORKDIR /NHANES
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/stageSprocs.R
 
+# run the script to translate the raw coded tables
 COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
 WORKDIR /NHANES
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/translateRawTables.R
 
-WORKDIR /NHANES
-
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION staging-v0.0.5
+ENV EPICONDUCTOR_CONTAINER_VERSION 0.0.5
 ENV EPICONDUCTOR_COLLECTION_DATE 2023-07-24
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron

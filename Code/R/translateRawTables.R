@@ -36,11 +36,12 @@ suppressWarnings({
     }
 })
 
-tableList = DBI::dbGetQuery(cn, "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'Raw' GROUP BY TABLE_NAME")
+tableList = DBI::dbGetQuery(cn, "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'Raw' GROUP BY TABLE_NAME ORDER BY TABLE_NAME")
 
 for (i in 1:nrow(tableList)) {
     
     currRawTableName = tableList[i,1]
+    print(paste("Translating ", currRawTableName, sep=""))
     stmt = paste0("EXEC spTranslateTable 'Raw', ", currRawTableName, ", 'Translated', ", currRawTableName)
     SqlTools::dbSendUpdate(cn, stmt)
 }
@@ -50,3 +51,16 @@ SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
+# shrink tempdb
+SqlTools::dbSendUpdate(cn, "USE tempdb")
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev, 8)")
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev2, 8)")
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev3, 8)")
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev4, 8)")
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev5, 8)")
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev6, 8)")
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(templog, 8)")
+
+# shutdown the database engine cleanly
+SqlTools::dbSendUpdate(cn, "SHUTDOWN")

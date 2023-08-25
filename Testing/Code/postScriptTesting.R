@@ -1,6 +1,16 @@
 # postScriptTesting.R
 # Tests to be run post-build on the NHANES db to verify completion and consistency in the data.
 
+# NP_REVIEW:
+# * We need to modify each of these tests to do some combination of:
+#   -throw an error
+#   -write errors to log
+#
+# * Need to be consistent with upper / lower case SQL statements
+# * This script needs a more descriptive name
+# * Please resolve all object names as Package::Object rather than importing 
+#   objects into the global namespace via library(Package)
+
 library(glue)
 library(stringr)
 
@@ -43,6 +53,8 @@ suppressWarnings({
 })
 
 # get a list of all base tables
+# NP_REVIEW:
+# Can you use a more descriptive variable name, maybe allTableNames or something like that?
 m = DBI::dbGetQuery(cn, "
                         SELECT DISTINCT(TABLE_NAME)
                         FROM INFORMATION_SCHEMA.TABLES
@@ -71,7 +83,6 @@ pattern <- "^v(0|[1-9]|[1-9][0-9]|100)\\.(0|[1-9]|[1-9][0-9]|100)\\.(0|[1-9]|[1-
 # TEST: Metadata and Ontology Schema Tables have the required names and columns
 # RESULT: All of the following setequal lines should return TRUE. A FALSE return means there are mismatched columns
 ##################################################################################################################
-
 
 mismatchedCols <- function(cols, tableName){
         query = setequal(cols, unlist(DBI::dbGetQuery(cn, paste("SELECT DISTINCT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='",tableName,"' AND TABLE_CATALOG='NhanesLandingZone'", sep=''))))
@@ -114,6 +125,10 @@ mismatchedCols(nhanes_variables_mappings, "nhanes_variables_mappings")
 # RESULT: Returns any tables in QuestionnaireDescriptions not found in 'Raw' schema, should be empty result otherwise
 ##################################################################################################################
 
+# NP_REVIEW:
+# I think this is doing the opposite of what the comment says, it's identifying RAW tables that do not have
+# an entry in QuestionnaireDescriptions or ExcludedTables.  Both are reasonable tests to include.
+
 questionnaireToRaw = "
                     SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'Raw'
                     AND TABLE_CATALOG='NhanesLandingZone'
@@ -130,6 +145,20 @@ DBI::dbGetQuery(cn, questionnaireToRaw) # returns any tables found
 # TEST: Raw and Translated tables have the same row counts
 # RESULT: 
 ##################################################################################################################
+
+# NP_REVIEW:
+# Why not just:
+# for (i in 1:nrow(m)) {
+
+#     currTableName = m[i,"TABLE_NAME"]
+
+#     c1 = DBI::dbGetQuery(cn, paste0("SELECT COUNT(*) FROM Raw.", currTableName))
+#     c2 = DBI::dbGetQuery(cn, paste0("SELECT COUNT(*) FROM Translated.", currTableName))
+
+#     if (c1 != c2) {
+#         print(paste0("Raw.", currTableName, " has ", c1, " and Translated.", currTableName, " has ", c2, " rows."))
+#     }
+# }
 
 # create an empty dataframe
 df <- setNames(data.frame(matrix(ncol = 2, nrow = 0)), c("TableColumn", "NullPercent"))
@@ -199,6 +228,9 @@ for (i in 1:nrow(m)) {
         cn, 
         paste(
             sep="", 
+            # NP_REVIEW:
+            # Why 'LIKE' and not '='?  Shouldn't the table names match exactly?
+            # The subquery needs to specify the catalog the same way the parent query does.
             "SELECT COLUMN_NAME, TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME LIKE '", currTableName, "' AND TABLE_SCHEMA = 'Raw' AND TABLE_CATALOG='NhanesLandingZone' AND COLUMN_NAME NOT IN ( SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME LIKE '", currTableName, "' AND TABLE_SCHEMA = 'Translated' )" 
         ))
 }
