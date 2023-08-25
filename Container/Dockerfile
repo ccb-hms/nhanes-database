@@ -323,7 +323,7 @@ ARG ACCEPT_EULA=Y
 ARG SA_PASSWORD=yourStrong(!)Password
 
 # run the download and database build
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awaiting server bootup" && sleep 15 && echo "lets try to logon"  && /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P ${SA_PASSWORD})' \
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/download.R --container-build=TRUE
 	
 # run the ETL process to load variable metadata
