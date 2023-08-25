@@ -8,6 +8,8 @@
 #
 # * Need to be consistent with upper / lower case SQL statements
 # * This script needs a more descriptive name
+# * Please resolve all object names as Package::Object rather than importing 
+#   objects into the global namespace via library(Package)
 
 library(glue)
 library(stringr)
@@ -147,12 +149,12 @@ DBI::dbGetQuery(cn, questionnaireToRaw) # returns any tables found
 # NP_REVIEW:
 # Why not just:
 # for (i in 1:nrow(m)) {
-#
+
 #     currTableName = m[i,"TABLE_NAME"]
-#
+
 #     c1 = DBI::dbGetQuery(cn, paste0("SELECT COUNT(*) FROM Raw.", currTableName))
 #     c2 = DBI::dbGetQuery(cn, paste0("SELECT COUNT(*) FROM Translated.", currTableName))
-#
+
 #     if (c1 != c2) {
 #         print(paste0("Raw.", currTableName, " has ", c1, " and Translated.", currTableName, " has ", c2, " rows."))
 #     }
