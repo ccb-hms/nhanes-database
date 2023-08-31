@@ -54,13 +54,15 @@ SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
 # shrink tempdb
 SqlTools::dbSendUpdate(cn, "USE tempdb")
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev, 8)")
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev2, 8)")
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev3, 8)")
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev4, 8)")
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev5, 8)")
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(tempdev6, 8)")
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(templog, 8)")
+
+tempFiles = DBI::dbGetQuery(cn, "
+                        SELECT name FROM TempDB.sys.sysfiles
+                        ")
+
+for (i in 1:nrow(tempFiles)) {    
+    currTempFileName = tempFiles[i,1]
+    SqlTools::dbSendUpdate(cn, paste("DBCC SHRINKFILE(",currTempFileName,", 8)", sep=''))
+}
 
 # shutdown the database engine cleanly
 SqlTools::dbSendUpdate(cn, "SHUTDOWN")
