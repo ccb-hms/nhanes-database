@@ -112,7 +112,10 @@ SqlTools::dbSendUpdate(cn, "
         BeginYear int,
         EndYear int,
         DataGroup varchar(64),
-        UseConstraints varchar(64)
+        UseConstraints varchar(64),
+        DocFile varchar(1024),
+        DataFile varchar(1024),
+        DatePublished varchar(1024)
     )
 ")
 
@@ -129,6 +132,9 @@ SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [Table] = REPLACE([Ta
 SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [TableName] = REPLACE([TableName], CHAR(34), '')")
 SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [DataGroup] = REPLACE([DataGroup], CHAR(34), '')")
 SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [UseConstraints] = REPLACE([UseConstraints], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [DocFile] = REPLACE([DocFile], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [DataFile] = REPLACE([DataFile], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [DatePublished] = REPLACE([DatePublished], CHAR(34), '')")
 
 # clean up and insert in new table with consistent nomenclature
 SqlTools::dbSendUpdate(cn, "
@@ -138,7 +144,10 @@ SqlTools::dbSendUpdate(cn, "
         T.BeginYear,
         T.EndYear,
         T.DataGroup,
-        T.UseConstraints
+        T.UseConstraints,
+        T.DocFile,
+        T.DataFile,
+        T.DatePublished
     INTO NhanesLandingZone.Metadata.QuestionnaireDescriptions
     FROM 
         ##tmp_nhanes_tables T 
@@ -150,7 +159,10 @@ SqlTools::dbSendUpdate(cn, "
         T.BeginYear,
         T.EndYear,
         T.DataGroup,
-        T.UseConstraints
+        T.UseConstraints,
+        T.DocFile,
+        T.DataFile,
+        T.DatePublished
 ")
 
 SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_tables")
@@ -248,8 +260,8 @@ for (currTable in ontology_tables) {
     # generate SQL table definitions from column types in tibbles
     createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste(sep=".", "Ontology", sqlTableName), loaded_data) # nolint
 
-    # change TEXT to VARCHAR(256)
-    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
+    # change TEXT to VARCHAR(1024)
+    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(MAX)", fixed = TRUE) # nolint # nolint
 
     # change DOUBLE to float
     createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
@@ -257,9 +269,11 @@ for (currTable in ontology_tables) {
     # remove double quotes, which interferes with the schema specification
     createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
 
+    print(createTableQuery)
     # create the table in SQL
     SqlTools::dbSendUpdate(cn, createTableQuery)
-
+    print("no problem creating")
+    
     # run bulk insert
     insertStatement = paste(sep="",
                             "BULK INSERT Ontology.",
@@ -269,7 +283,8 @@ for (currTable in ontology_tables) {
                             "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
     )
     SqlTools::dbSendUpdate(cn, insertStatement)
-
+    print("no problem inserting")
+    
   # keep memory as clean as possible
   rm(loaded_data)
   gc()

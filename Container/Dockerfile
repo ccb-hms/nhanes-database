@@ -322,6 +322,9 @@ RUN chmod -R 777 /NHANES/Data
 ARG ACCEPT_EULA=Y
 ARG SA_PASSWORD=yourStrong(!)Password
 
+# copy the container build tests
+COPY Testing/Code/containerBuildTests.R /NHANES/containerBuildTests.R
+
 # run the download and database build
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/download.R --container-build=TRUE
@@ -340,7 +343,7 @@ RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /tmp/NHANES-metadata
 
 RUN git fetch --tags
-RUN git checkout tags/v3.4.0
+RUN git checkout tags/v3.5.0
 	
 # # Rafael/Jason Code Implementation # # 
 # RUN python3.9 -m pip install pydantic==1.7
@@ -382,7 +385,7 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/translateRawTables.R
 
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION 0.0.5
+ENV EPICONDUCTOR_CONTAINER_VERSION v0.0.5
 ENV EPICONDUCTOR_COLLECTION_DATE 2023-07-24
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
@@ -390,5 +393,8 @@ RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/lo
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/environment
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/environment
+
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/containerBuildTests.R
 
 CMD ["/startup/startup.sh"]
