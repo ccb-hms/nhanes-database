@@ -1,16 +1,5 @@
-# postScriptTesting.R
+# containerBuildTests.R
 # Tests to be run post-build on the NHANES db to verify completion and consistency in the data.
-
-# NP_REVIEW:
-# * We need to modify each of these tests to do some combination of:
-#   -throw an error
-#   -write errors to log
-#
-# * Need to be consistent with upper / lower case SQL statements
-# * This script needs a more descriptive name
-# * Please resolve all object names as Package::Object rather than importing 
-#   objects into the global namespace via library(Package)
-
 
 # parameters to connect to SQL
 sqlHost = "localhost"
