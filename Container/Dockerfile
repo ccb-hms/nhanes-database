@@ -262,7 +262,6 @@ RUN Rscript -e "remotes::install_cran('reshape2')"
 RUN Rscript -e "remotes::install_cran('jsonlite')"
 RUN Rscript -e "remotes::install_cran('viridis')"
 RUN Rscript -e "remotes::install_cran('optparse')"
-RUN Rscript -e "remotes::install_cran('nhanesA')"
 
 # need old version of rvest in order for the hack that parses URLs to work in the NHANES download script
 RUN Rscript -e "remove.packages('rvest')"
@@ -272,6 +271,9 @@ RUN Rscript -e "remotes::install_cran('rvest', repos='https://packagemanager.pos
 RUN chmod -R 777 /usr/local/lib/R/library
 RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
 
+#install nhanesA and phonto from github in order to have the latest version (CRAN will take a while to update)
+RUN Rscript -e "devtools::install_github('ccb-hms/phonto')"
+RUN Rscript -e "devtools::install_github('cjendres1/nhanes')"
 
 #------------------------------------------------------------------------------
 # Install and configure RStudio Server
@@ -343,7 +345,7 @@ RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /tmp/NHANES-metadata
 
 RUN git fetch --tags
-RUN git checkout tags/v3.5.0
+RUN git checkout tags/v3.6.0
 	
 # # Rafael/Jason Code Implementation # # 
 # RUN python3.9 -m pip install pydantic==1.7
@@ -353,7 +355,6 @@ RUN git checkout tags/v3.5.0
 ###############################################
 
 # install packages, which require newer version of rvest in conflict with the download / build script
-RUN Rscript -e "remotes::install_version('nhanesA', repos='https://packagemanager.posit.co/cran/__linux__/focal/2023-07-18/', upgrade=TRUE, version='0.7.4')"
 RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
 
 # # Rafael/Jason Code Implementation # #
