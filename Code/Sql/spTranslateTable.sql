@@ -168,6 +168,7 @@ AS
 
     -- assemble SQL to join the unpivoted table to the variable codebook
     -- to decode the responses
+    -- Defining VARCHAR(256) resolves issue #79 in Github, where varchars are being cut off in the translated tables
     DECLARE @TranslateStmt varchar(MAX)
     SET @TranslateStmt = '
         SELECT 

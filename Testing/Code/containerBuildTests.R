@@ -216,3 +216,63 @@ for (i in 1:nrow(allTableNames)) {
         stop(paste("TRANSLATED table ", currTableName, " missing columns defined in RAW version: ", missingCols), sep='')
     }
 }
+
+
+# Wishlist item, not pressing right now
+##################################################################################################################################################
+# TEST: In the VariableCodebook, there is a Count variable that represents the expected row counts for each value. Test that these are accurate.
+# RESULT: Returns any tables where the actual row count does not match the expected.
+##################################################################################################################################################
+# codebook = DBI::dbGetQuery(cn, "SELECT  Variable, TableName, CodeOrValue, ValueDescription, Count FROM [NhanesLandingZone].[Metadata].[VariableCodebook]")
+
+# for (i in 1:nrow(codebook)) {
+#     valueDescription = codebook[i, "ValueDescription"]
+#     variable = codebook[i, "Variable"]
+#     tableName = codebook[i, "TableName"]
+    
+#     isRange = DBI::dbGetQuery(cn, paste("SELECT COUNT('Range of Values') FROM [NhanesLandingZone].[Metadata].[VariableCodebook] WHERE Variable = '", variable, "' AND TableName = '",tableName,"' AND ValueDescription = 'Range of Values'", sep=""))
+    
+#     if (isRange[1,]==0) {
+#         nonRangeValues = paste("SELECT t.", variable,
+#                                 ", t.rowcounts FROM  (SELECT [", variable , 
+#                                 "] , COUNT([", variable , 
+#                                 "]) AS rowcounts FROM [NhanesLandingZone].[Raw].[", 
+#                                 tableName, "] GROUP BY [", 
+#                                 variable, 
+#                                 "]) t LEFT JOIN (SELECT CodeOrValue ,Count FROM [NhanesLandingZone].[Metadata].[VariableCodebook] WHERE TableName = '", 
+#                                 tableName, 
+#                                 "' AND Variable = '", variable,
+#                                 "' AND CodeOrValue != '.' AND Count > 0) s ON s.CodeOrValue = t.", variable,
+#                                 " WHERE t.rowcounts <> s.Count", sep="")
+
+#         nonRangeValuesQuery = DBI::dbGetQuery(cn, nonRangeValues)
+        
+#         if (length(nonRangeValuesQuery[0])>0) {
+#             print("There's a mismatch dude.")
+#         }
+#         else{print(paste("Row count matches for variable ",variable, sep=""))}
+#     }
+#     else{
+#         rangeValues = paste("SELECT CodeOrValue
+#                                 ,Count
+#                                 ,RTRIM(LTRIM(SUBSTRING(CodeOrValue,0, CHARINDEX(' to ',CodeOrValue)))) as MinValue
+#                                 ,RTRIM(LTRIM(SUBSTRING(CodeOrValue, CHARINDEX(' to ', CodeOrValue) + 4, LEN(CodeOrValue)))) as MaxValue
+#                         FROM [NhanesLandingZone].[Metadata].[VariableCodebook]
+#                         WHERE TableName = '",
+#                         tableName,
+#                         "' AND Variable = '",
+#                         variable,
+#                         "'AND ValueDescription = 'Range of Values' AND CodeOrValue != '.' AND Count > 0", sep="")
+        
+#         rangeValuesQuery = DBI::dbGetQuery(cn, rangeValues)
+        
+#         MinValue = rangeValuesQuery[1, "MinValue"]
+#         MaxValue = rangeValuesQuery[1, "MaxValue"]
+        
+#         rowCountRanges = DBI::dbGetQuery(cn, paste("SELECT COUNT(",variable,") FROM [NhanesLandingZone].[Raw].[", tableName,"] t WHERE ", variable, " BETWEEN ", MinValue," AND ", MaxValue ,sep=""))
+
+#         if (rowCountRanges != rangeValuesQuery[1, "Count"]) {
+#             print("There's a mismatch dude.")
+#         }  
+#         else{print(paste("Row count matches for variable ",variable, sep=""))}          
+# }
