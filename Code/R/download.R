@@ -17,10 +17,6 @@
 #         -e 'SA_PASSWORD=yourStrong(!)Password' \
 #         nhanes-workbench
 
-library(glue)
-library(stringr)
-library(readr)
-
 optionList = list(
   optparse::make_option(c("--container-build"), type="logical", default=FALSE, 
                         help="is this script running inside of a container build process", metavar="logical"),
@@ -112,13 +108,14 @@ fileListTable$Years[fileListTable$Years == "1988-2020"] <- '1999-2000'
 fileListTable$Years[fileListTable$Years == "2007-2012"] <- '2007-2008'
 fileListTable$Years[fileListTable$Years == "1999-2004"] <- '1999-2000'
 fileListTable$Years[fileListTable$Years == "1999-2020"] <- '1999-2000'
+fileListTable$Years[fileListTable$Years == "2017-2020"] <- '2017-2018'
 
 # Replace the hyperlink in the Doc File column with the full url
-fileListTable$'Doc File' <- glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Doc File'}.htm")
+fileListTable$'Doc File' <- glue::glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Doc File'}.htm")
 fileListTable$'Doc File'<-gsub(" Doc","",as.character(fileListTable$'Doc File'))
 
 # Replace the hyperlink in the Data File column with the full url
-fileListTable$'Data File' <- glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Data File'}.XPT")
+fileListTable$'Data File' <- glue::glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Data File'}.XPT")
 fileListTable$'Data File'<- gsub('([A-z]+) .*', '\\1', as.character(fileListTable$'Data File'))
 fileListTable$'Data File' <- paste0(fileListTable$'Data File', ".XPT")
 fileListTable$'Data File'<-gsub(" Data","",as.character(fileListTable$'Data File'))
