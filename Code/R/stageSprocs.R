@@ -38,3 +38,24 @@ suppressWarnings({
 
 sproc = paste(collapse="\n", readLines("spTranslateTable.sql"))
 SqlTools::dbSendUpdate(cn, sproc)
+
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
+# shrink tempdb
+SqlTools::dbSendUpdate(cn, "USE tempdb")
+
+tempFiles = DBI::dbGetQuery(cn, "
+                        SELECT name FROM TempDB.sys.sysfiles
+                        ")
+
+for (i in 1:nrow(tempFiles)) {    
+    currTempFileName = tempFiles[i,1]
+    SqlTools::dbSendUpdate(cn, paste("DBCC SHRINKFILE(",currTempFileName,", 8)", sep=''))
+}
+
+# shutdown the database engine cleanly
+SqlTools::dbSendUpdate(cn, "SHUTDOWN")

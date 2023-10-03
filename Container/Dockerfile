@@ -241,6 +241,9 @@ RUN Rscript -e "remotes::install_cran('testthat')"
 RUN Rscript -e "remotes::install_cran('DBI')"
 RUN Rscript -e "remotes::install_cran('odbc')"
 RUN Rscript -e "remotes::install_cran('readr')"
+RUN Rscript -e "remotes::install_cran('kableExtra')"
+RUN Rscript -e "remotes::install_cran('plotROC')"
+RUN Rscript -e "remotes::install_cran('sjPlot')"
 
 # -- vanilla because there is a bug that causes the R intro / preamble text to get pushed into the compiler
 RUN Rscript --vanilla -e "remotes::install_cran('lme4', repos='"$R_REPOSITORY"')"
@@ -268,6 +271,9 @@ RUN Rscript -e "remotes::install_cran('rvest', repos='https://packagemanager.pos
 RUN chmod -R 777 /usr/local/lib/R/library
 RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
 
+#install nhanesA and phonto from github in order to have the latest version (CRAN will take a while to update)
+RUN Rscript -e "devtools::install_github('ccb-hms/phonto')"
+RUN Rscript -e "devtools::install_github('cjendres1/nhanes')"
 
 #------------------------------------------------------------------------------
 # Install and configure RStudio Server
@@ -318,26 +324,53 @@ RUN chmod -R 777 /NHANES/Data
 ARG ACCEPT_EULA=Y
 ARG SA_PASSWORD=yourStrong(!)Password
 
+# copy the container build tests
+COPY Testing/Code/containerBuildTests.R /NHANES/containerBuildTests.R
+
 # run the download and database build
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr --accept-eula & (echo "awaiting server bootup" && sleep 15 && echo "lets try to logon"  && /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P ${SA_PASSWORD})' \
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/download.R --container-build=TRUE
 	
 # run the ETL process to load variable metadata
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
-COPY Code/R/createQuestionnaireViews.R /NHANES/createQuestionnaireViews.R
 WORKDIR /tmp
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+	&& apt-get install \
+		-y \
+		python3.9 \
+		python3-pip
+
 RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /tmp/NHANES-metadata
+
 RUN git fetch --tags
-RUN latestTag=$(git describe --tags `git rev-list --tags --max-count=1`)
-RUN git checkout $latestTag
+RUN git checkout tags/v3.6.0
+	
+# # Rafael/Jason Code Implementation # # 
+# RUN python3.9 -m pip install pydantic==1.7
+# RUN python3.9 -m pip install pandas==2.0.2
+# RUN python3.9 -m pip install Owlready2==0.40
+# RUN python3.9 -m pip install text2term==2.3.2
+###############################################
+
+# install packages, which require newer version of rvest in conflict with the download / build script
+RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
+
+# # Rafael/Jason Code Implementation # #
+# WORKDIR /tmp/NHANES-metadata/code
+
+# RUN Rscript get_nhanes_metadata.R
+
+# RUN python3.9 generate_ontology_tables.py
+# RUN python3.9 generate_ontology_mappings.py
+# RUN python3.9 generate_nhanes_mapping_report.py
+#################################################
+
+WORKDIR /tmp/NHANES-metadata
 
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/etlVariableCodebook.R
-	
-# install packages, which require newer version of rvest in conflict with the download / build script
-RUN Rscript -e "remotes::install_version('nhanesA', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.7.1')"
-RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
 
 # translate the coded responses
 COPY Code/Sql/spTranslateTable.sql /NHANES/spTranslateTable.sql
@@ -346,21 +379,23 @@ WORKDIR /NHANES
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/stageSprocs.R
 
+# run the script to translate the raw coded tables
 COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
 WORKDIR /NHANES
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/translateRawTables.R
 
-WORKDIR /NHANES
-
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION v0.0.4
-ENV EPICONDUCTOR_COLLECTION_DATE 2023-06-28
+ENV EPICONDUCTOR_CONTAINER_VERSION v0.5.0
+ENV EPICONDUCTOR_COLLECTION_DATE 2023-10-02
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/environment
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/environment
+
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/containerBuildTests.R
 
 CMD ["/startup/startup.sh"]

@@ -73,11 +73,12 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT NhanesLandingZone.Metadata.VariableCodebook FROM '", codebookFile, "'
-    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t', ROWTERMINATOR = '\n')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
 
+#TODO: make this table more comprehensive, to invlude suffixes as well as prefixes
 # create the ExcludedTables table in SQL
 SqlTools::dbSendUpdate(cn, "
     CREATE TABLE NhanesLandingZone.Metadata.ExcludedTables (
@@ -91,6 +92,7 @@ insertStatement = paste(sep="", "
     BULK INSERT NhanesLandingZone.Metadata.ExcludedTables FROM '", excludedTables, "'
     WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
+
 
 SqlTools::dbSendUpdate(cn, insertStatement)
 
@@ -107,8 +109,13 @@ SqlTools::dbSendUpdate(cn, "
     CREATE TABLE ##tmp_nhanes_tables (
         [Table] varchar(64),
         TableName varchar(1024),
+        BeginYear int,
+        EndYear int,
         DataGroup varchar(64),
-        Year int
+        UseConstraints varchar(64),
+        DocFile varchar(1024),
+        DataFile varchar(1024),
+        DatePublished varchar(1024)
     )
 ")
 
@@ -124,14 +131,23 @@ SqlTools::dbSendUpdate(cn, insertStatement)
 SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [Table] = REPLACE([Table], CHAR(34), '')")
 SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [TableName] = REPLACE([TableName], CHAR(34), '')")
 SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [DataGroup] = REPLACE([DataGroup], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [UseConstraints] = REPLACE([UseConstraints], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [DocFile] = REPLACE([DocFile], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [DataFile] = REPLACE([DataFile], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_tables SET [DatePublished] = REPLACE([DatePublished], CHAR(34), '')")
 
 # clean up and insert in new table with consistent nomenclature
 SqlTools::dbSendUpdate(cn, "
     SELECT 
         T.TableName AS Description,
-        T.DataGroup,
         Q.TableName,
-        T.Year
+        T.BeginYear,
+        T.EndYear,
+        T.DataGroup,
+        T.UseConstraints,
+        T.DocFile,
+        T.DataFile,
+        T.DatePublished
     INTO NhanesLandingZone.Metadata.QuestionnaireDescriptions
     FROM 
         ##tmp_nhanes_tables T 
@@ -139,9 +155,14 @@ SqlTools::dbSendUpdate(cn, "
             T.[Table] = Q.TableName
     GROUP BY
         T.TableName,
-        T.DataGroup,
         Q.TableName,
-        T.Year
+        T.BeginYear,
+        T.EndYear,
+        T.DataGroup,
+        T.UseConstraints,
+        T.DocFile,
+        T.DataFile,
+        T.DatePublished
 ")
 
 SqlTools::dbSendUpdate(cn, "DROP TABLE ##tmp_nhanes_tables")
@@ -163,10 +184,14 @@ SqlTools::dbSendUpdate(cn, "
         SASLabel varchar(64),
         EnglishText varchar(1024),
         Target varchar(128),
+        UseConstraints varchar(128),
         ProcessedText varchar(1024),
-        Tags varchar(128)
+        Tags varchar(1024),
+        VariableID varchar(1024),
+        OntologyMapped varchar(1024)
     )
 ")
+
 
 # run bulk insert
 insertStatement = paste(sep="", "
@@ -182,7 +207,12 @@ SqlTools::dbSendUpdate(cn, "
     ADD 
         Description varchar(1024) NULL, 
         Target varchar(128) NULL,
-        SasLabel varchar(64)
+        SasLabel varchar(64),
+        UseConstraints varchar(64),
+        ProcessedText varchar(1024),
+        Tags varchar(1024),
+        VariableID varchar(1024),
+        OntologyMapped varchar(1024)
 ")
 
 # update the new columns in the NhanesLandingZone.dbo.QuestionnaireVariables
@@ -192,7 +222,12 @@ SqlTools::dbSendUpdate(cn, "
     SET 
         Q.Description = V.EnglishText,
         Q.Target = V.Target,
-        Q.SasLabel = V.SasLabel
+        Q.SasLabel = V.SasLabel,
+        Q.UseConstraints = V.UseConstraints,
+        Q.ProcessedText = V.ProcessedText,
+        Q.Tags = V.Tags,
+        Q.VariableID = V.VariableID,
+        Q.OntologyMapped = V.OntologyMapped    
     FROM 
         NhanesLandingZone.Metadata.QuestionnaireVariables Q
         INNER JOIN ##tmp_nhanes_variables V ON
@@ -225,8 +260,8 @@ for (currTable in ontology_tables) {
     # generate SQL table definitions from column types in tibbles
     createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste(sep=".", "Ontology", sqlTableName), loaded_data) # nolint
 
-    # change TEXT to VARCHAR(256)
-    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
+    # change TEXT to VARCHAR(1024)
+    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(MAX)", fixed = TRUE) # nolint # nolint
 
     # change DOUBLE to float
     createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
@@ -234,9 +269,11 @@ for (currTable in ontology_tables) {
     # remove double quotes, which interferes with the schema specification
     createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
 
+    print(createTableQuery)
     # create the table in SQL
     SqlTools::dbSendUpdate(cn, createTableQuery)
-
+    print("no problem creating")
+    
     # run bulk insert
     insertStatement = paste(sep="",
                             "BULK INSERT Ontology.",
@@ -246,7 +283,8 @@ for (currTable in ontology_tables) {
                             "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
     )
     SqlTools::dbSendUpdate(cn, insertStatement)
-
+    print("no problem inserting")
+    
   # keep memory as clean as possible
   rm(loaded_data)
   gc()
@@ -308,3 +346,18 @@ SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
+# shrink tempdb
+SqlTools::dbSendUpdate(cn, "USE tempdb")
+
+tempFiles = DBI::dbGetQuery(cn, "
+                        SELECT name FROM TempDB.sys.sysfiles
+                        ")
+
+for (i in 1:nrow(tempFiles)) {    
+    currTempFileName = tempFiles[i,1]
+    SqlTools::dbSendUpdate(cn, paste("DBCC SHRINKFILE(",currTempFileName,", 8)", sep=''))
+}
+
+# shutdown the database engine cleanly
+SqlTools::dbSendUpdate(cn, "SHUTDOWN")

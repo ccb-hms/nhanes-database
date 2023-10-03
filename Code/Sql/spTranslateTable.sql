@@ -168,19 +168,20 @@ AS
 
     -- assemble SQL to join the unpivoted table to the variable codebook
     -- to decode the responses
+    -- Defining VARCHAR(256) resolves issue #79 in Github, where varchars are being cut off in the translated tables
     DECLARE @TranslateStmt varchar(MAX)
     SET @TranslateStmt = '
         SELECT 
             T.' + @pkColName + ',
             T.Variable,
-            COALESCE(CAST(V.ValueDescription AS VARCHAR), CAST(T.Response AS VARCHAR)) AS ValueDescription
+            COALESCE(CAST(V.ValueDescription AS VARCHAR(256)), CAST(T.Response AS VARCHAR(256))) AS ValueDescription
         INTO 
             ' + @TranslatedTempTableName + '
         FROM 
             ' + @UnpivotTempTableName + ' T 
             LEFT OUTER JOIN Metadata.VariableCodebook V ON 
                 T.Variable = V.Variable 
-                AND CAST(T.Response AS VARCHAR) = CAST(V.CodeOrValue AS VARCHAR)
+                AND CAST(T.Response AS VARCHAR(256)) = CAST(V.CodeOrValue AS VARCHAR(256))
                 AND V.TableName = ''' + @SourceTableName + '''        
     '
     
@@ -212,8 +213,10 @@ AS
                             ) 
                     ) AS PivotTable
                 )
-                SELECT P.*, ' + @NumericSelectColNames + ' INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' 
-                FROM PivotTable P INNER JOIN ' + @SourceTableSchema + '.' + @SourceTableName + ' S ON S.[' + @pkColName + '] = P.[' + @pkColName + ']
+                -- full outer join to accommodate scenarios where the categorical variables were all NULL
+                SELECT COALESCE(P.' + @pkColName + ', S.' + @pkColName + ') AS ' + @pkColName + REPLACE(', ' + @UnpivotColNames, ', [', ', P.[') +
+                REPLACE(', ' + @NumericSelectColNames, ', [', ', S.[') + ' INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' 
+                FROM PivotTable P FULL OUTER JOIN ' + @SourceTableSchema + '.' + @SourceTableName + ' S ON S.[' + @pkColName + '] = P.[' + @pkColName + ']
             '
         END
     ELSE
@@ -260,6 +263,7 @@ AS
     -- create a clustered index on the destination table with compression
     DECLARE @IndexStmt varchar(8000)
     SET @IndexStmt = 'CREATE CLUSTERED COLUMNSTORE INDEX ccix ON ' + @DestinationTableSchema + '.' + @DestinationTableName
+    EXEC(@IndexStmt)
 
     -- debugging
     -- EXEC('SELECT TOP 5 * FROM ' + @DestinationTableSchema + '.' + @DestinationTableName + ' ORDER BY SEQN')
@@ -270,3 +274,5 @@ AS
     EXEC(@GarbageCollectionStmt)
     SET @GarbageCollectionStmt = 'DROP TABLE IF EXISTS ' + @TranslatedTempTableName
     EXEC(@GarbageCollectionStmt)
+    
+    CHECKPOINT

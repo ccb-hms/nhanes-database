@@ -17,10 +17,6 @@
 #         -e 'SA_PASSWORD=yourStrong(!)Password' \
 #         nhanes-workbench
 
-library(glue)
-library(stringr)
-library(readr)
-
 optionList = list(
   optparse::make_option(c("--container-build"), type="logical", default=FALSE, 
                         help="is this script running inside of a container build process", metavar="logical"),
@@ -44,13 +40,37 @@ sqlUserName = "sa"
 sqlPassword = "yourStrong(!)Password"
 sqlDefaultDb = "master"
 
-# connect to SQL
-cn = MsSqlTools::connectMsSqlSqlLogin(
-  server = sqlHost, 
-  user = sqlUserName, 
-  password = sqlPassword, 
-  database = sqlDefaultDb
-)
+# loop waiting for SQL Server database to become available
+for (i in 1:60) {
+    cn = tryCatch(
+        # connect to SQL
+        MsSqlTools::connectMsSqlSqlLogin(
+            server = sqlHost, 
+            user = sqlUserName, 
+            password = sqlPassword, 
+            database = sqlDefaultDb
+        ), warning = function(e) {
+            return(NA)
+        }, error = function(e) {
+            return(NA)
+        }
+    )
+    
+    suppressWarnings({
+         if (is.na(cn)) {
+            Sys.sleep(10)
+        } else {
+            break
+        }
+    })
+   
+}
+
+suppressWarnings({
+    if (is.na(cn)) {
+        stop("could not connect to SQL Server")
+    }
+})
 
 # control persistence of downloaded and extracted text files
 persistTextFiles = FALSE
@@ -88,13 +108,14 @@ fileListTable$Years[fileListTable$Years == "1988-2020"] <- '1999-2000'
 fileListTable$Years[fileListTable$Years == "2007-2012"] <- '2007-2008'
 fileListTable$Years[fileListTable$Years == "1999-2004"] <- '1999-2000'
 fileListTable$Years[fileListTable$Years == "1999-2020"] <- '1999-2000'
+fileListTable$Years[fileListTable$Years == "2017-2020"] <- '2017-2018'
 
 # Replace the hyperlink in the Doc File column with the full url
-fileListTable$'Doc File' <- glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Doc File'}.htm")
+fileListTable$'Doc File' <- glue::glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Doc File'}.htm")
 fileListTable$'Doc File'<-gsub(" Doc","",as.character(fileListTable$'Doc File'))
 
 # Replace the hyperlink in the Data File column with the full url
-fileListTable$'Data File' <- glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Data File'}.XPT")
+fileListTable$'Data File' <- glue::glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Data File'}.XPT")
 fileListTable$'Data File'<- gsub('([A-z]+) .*', '\\1', as.character(fileListTable$'Data File'))
 fileListTable$'Data File' <- paste0(fileListTable$'Data File', ".XPT")
 fileListTable$'Data File'<-gsub(" Data","",as.character(fileListTable$'Data File'))
@@ -397,7 +418,7 @@ if (!opt[["include-exclusions"]]) {
       )
       SqlTools::dbSendUpdate(cn, insertStatement)
 
-} else{
+} else {
       # generate file name for temporary output
       currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
 
@@ -421,52 +442,64 @@ if (!opt[["include-exclusions"]]) {
                               "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
       )
       SqlTools::dbSendUpdate(cn, insertStatement)
- }
+}
 
-  # issue checkpoint
-  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-  # shrink transaction log
-  SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
-  # issue checkpoint
-  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-  if (!opt[["include-exclusions"]]) {
-  # create a table to hold records of the failed file downloads
-  SqlTools::dbSendUpdate(cn, "CREATE TABLE Metadata.DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
+if (!opt[["include-exclusions"]]) {
+# create a table to hold records of the failed file downloads
+SqlTools::dbSendUpdate(cn, "CREATE TABLE Metadata.DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
 
-  # generate file name for temporary output
-  currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
+# generate file name for temporary output
+currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
 
-  # write failed file downloads table to disk
-  write.table(
-    downloadErrors,
-    file = currOutputFileName,
-    sep = "\t",
-    na = "",
-    append=TRUE,
-    row.names = FALSE,
-    col.names = FALSE,
-    quote = FALSE
-  )
+# write failed file downloads table to disk
+write.table(
+  downloadErrors,
+  file = currOutputFileName,
+  sep = "\t",
+  na = "",
+  append=TRUE,
+  row.names = FALSE,
+  col.names = FALSE,
+  quote = FALSE
+)
 
-  # issue BULK INSERT
-  insertStatement = paste(sep="",
-                          "BULK INSERT ",
-                          "Metadata.DownloadErrors",
-                          " FROM '",
-                          currOutputFileName,
-                          "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-  )
+# issue BULK INSERT
+insertStatement = paste(sep="",
+                        "BULK INSERT ",
+                        "Metadata.DownloadErrors",
+                        " FROM '",
+                        currOutputFileName,
+                        "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+)
 
-  SqlTools::dbSendUpdate(cn, insertStatement)
+SqlTools::dbSendUpdate(cn, insertStatement)
 
-  # shrink transaction log
-  SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 
-  # issue checkpoint
-  SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-  # issue checkpoint
-  SqlTools::dbSendUpdate(cn, "SHUTDOWN")
+# shrink tempdb
+SqlTools::dbSendUpdate(cn, "USE tempdb")
+
+tempFiles = DBI::dbGetQuery(cn, "
+                        SELECT name FROM TempDB.sys.sysfiles
+                        ")
+
+for (i in 1:nrow(tempFiles)) {    
+    currTempFileName = tempFiles[i,1]
+    SqlTools::dbSendUpdate(cn, paste("DBCC SHRINKFILE(",currTempFileName,", 8)", sep=''))
+}
+
+# shutdown the database engine cleanly
+SqlTools::dbSendUpdate(cn, "SHUTDOWN")
