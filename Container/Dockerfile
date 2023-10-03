@@ -386,7 +386,7 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/translateRawTables.R
 
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION v0.5.0
+ENV EPICONDUCTOR_CONTAINER_VERSION v0.1.0
 ENV EPICONDUCTOR_COLLECTION_DATE 2023-10-02
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
