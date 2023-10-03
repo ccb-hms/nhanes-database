@@ -2,10 +2,24 @@
 
 This repository contains R code and a Docker image definition that facilitate pulling the CDC's NHANES (SAS) data files into text and / or inserting into SQL Server tables.
 
-The image contains SQL Server for Linux, R, RStudio Server, among other utilities.
+The image contains SQL Server for Linux, R, and RStudio Server, among other utilities.
+
+## Code
+The [code](https://github.com/ccb-hms/NHANES/tree/main/Code) folder contain R and SQL scripts used to download and ETL the CDC data. 
+* `download.R` Downloads the CDC SAS files directly from the CDC NHANES website.
+* `etlVariableCodebook.R` Loads the NHANES variable codebooks available [here: ](https://github.com/ccb-hms/NHANES-metadata.git)
+* `translateRawTables.R` Translates the variable responses in each NHANES questionnaire table.
+
+## Container
+The [container](https://github.com/ccb-hms/NHANES/tree/main/Container) folder contains the Dockerfile and related startup script.
+* `Dockerfile` is the container image for CCB's NHANES database project
+
+## Testing/Code
+The [Testing/Code](https://github.com/ccb-hms/NHANES/tree/main/Testing/Code) folder contains the testing script that runs at the end of the build to verify database structure, row count agreements, and general structural consistency between versions.
+* `containerBuildTests.R` contains all tests completed at build time.
 
 ## Running the image
-An image with a pre-built database can be run as follows (for other versions, see the [Dockerhub repository](https://hub.docker.com/r/hmsccb/nhanes-workbench/tags) and use the desired tag instead of 'latest'):
+An image with a pre-built database can be run as follows (for other versions, see the [Dockerhub repository](https://hub.docker.com/r/hmsccb/nhanes-workbench/tags) and use the desired tag):
 
 ```
 docker \
@@ -21,7 +35,7 @@ docker \
         -e 'CONTAINER_USER_PASSWORD=PASSWORD' \
         -e 'ACCEPT_EULA=Y' \
         -e 'SA_PASSWORD=yourStrong(!)Password' \
-        hmsccb/nhanes-workbench:version-0.0.4
+        hmsccb/nhanes-workbench:latest
 ```
 
 ### Parameters
@@ -63,4 +77,3 @@ If you are running SSH on the same host where the container is running:
 ```
 ssh USER@localhost -p 2200 -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=/dev/null
 ```
-
