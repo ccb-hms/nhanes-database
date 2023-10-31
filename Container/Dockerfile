@@ -267,10 +267,6 @@ RUN Rscript -e "remotes::install_cran('optparse')"
 RUN Rscript -e "remove.packages('rvest')"
 RUN Rscript -e "remotes::install_cran('rvest', repos='https://packagemanager.posit.co/cran/__linux__/focal/2021-01-29')"
 
-# allow modification of these locations so users can install R packages without warnings
-RUN chmod -R 777 /usr/local/lib/R/library
-RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
-
 #install nhanesA and phonto from github in order to have the latest version (CRAN will take a while to update)
 RUN Rscript -e "devtools::install_github('ccb-hms/phonto')"
 RUN Rscript -e "devtools::install_github('cjendres1/nhanes')"
@@ -384,6 +380,10 @@ COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
 WORKDIR /NHANES
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/translateRawTables.R
+
+# allow modification of these locations so users can install R packages without warnings
+RUN chmod -R 777 /usr/local/lib/R/library
+RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
 
 # Declare which version of the container this is, and make it available inside the container 
 ENV EPICONDUCTOR_CONTAINER_VERSION v0.5.0
