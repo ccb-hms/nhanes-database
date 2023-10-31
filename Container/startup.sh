@@ -26,6 +26,9 @@ fi
 if [[ $ACCEPT_EULA == "Y" && ! -z $SA_PASSWORD ]]
 then
 	runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &'
+	
+	# make the SA password available to all users
+	RUN echo "SA_PASSWORD=$SA_PASSWORD" >> /etc/environment
 fi
 
 # start RStudio Server
