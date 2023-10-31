@@ -386,8 +386,8 @@ RUN chmod -R 777 /usr/local/lib/R/library
 RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
 
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION v0.5.0
-ENV EPICONDUCTOR_COLLECTION_DATE 2023-10-02
+ENV EPICONDUCTOR_CONTAINER_VERSION v0.5.1
+ENV EPICONDUCTOR_COLLECTION_DATE 2023-10-31
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
