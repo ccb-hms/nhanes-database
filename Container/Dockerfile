@@ -267,10 +267,6 @@ RUN Rscript -e "remotes::install_cran('optparse')"
 RUN Rscript -e "remove.packages('rvest')"
 RUN Rscript -e "remotes::install_cran('rvest', repos='https://packagemanager.posit.co/cran/__linux__/focal/2021-01-29')"
 
-# allow modification of these locations so users can install R packages without warnings
-RUN chmod -R 777 /usr/local/lib/R/library
-RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
-
 #install nhanesA and phonto from github in order to have the latest version (CRAN will take a while to update)
 RUN Rscript -e "devtools::install_github('ccb-hms/phonto')"
 RUN Rscript -e "devtools::install_github('cjendres1/nhanes')"
@@ -385,9 +381,13 @@ WORKDIR /NHANES
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/translateRawTables.R
 
+# allow modification of these locations so users can install R packages without warnings
+RUN chmod -R 777 /usr/local/lib/R/library
+RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
+
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION v0.1.0
-ENV EPICONDUCTOR_COLLECTION_DATE 2023-10-02
+ENV EPICONDUCTOR_CONTAINER_VERSION v0.5.1
+ENV EPICONDUCTOR_COLLECTION_DATE 2023-10-31
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron
