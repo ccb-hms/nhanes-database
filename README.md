@@ -25,6 +25,7 @@ An image with a pre-built database can be run as follows: (for other versions, s
 docker \
     run \
         --rm \
+        --platform=linux/amd64 \
         --name nhanes-workbench \
         -d \
         -v LOCAL_DIRECTORY:/HostData \
