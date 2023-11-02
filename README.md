@@ -19,7 +19,7 @@ The [Testing/Code](https://github.com/ccb-hms/NHANES/tree/main/Testing/Code) fol
 * `containerBuildTests.R` contains all tests completed at build time.
 
 ## Running the image
-An image with a pre-built database can be run as follows: (for other versions, see the [Dockerhub repository](https://hub.docker.com/r/hmsccb/nhanes-workbench/tags.) and use the desired tag. The current release is hmsccb/nhanes-workbench:version-0.1.0):
+An image with a pre-built database can be run as follows: (for other versions, see the [Dockerhub repository](https://hub.docker.com/r/hmsccb/nhanes-workbench/tags.) and use the desired tag. The current release is hmsccb/nhanes-workbench:version-0.1.1):
 
 ```
 docker \
