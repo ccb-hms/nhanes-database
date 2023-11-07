@@ -28,8 +28,8 @@ then
 	runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &'
 	
 	# make the SA password available to all users
-	echo "SA_PASSWORD=$SA_PASSWORD" >> /etc/environment
-	echo "SA_PASSWORD=$SA_PASSWORD" >> /usr/local/lib/R/etc/Renviron
+	echo "SA_PASSWORD=\"$SA_PASSWORD\"" >> /etc/environment
+	echo "SA_PASSWORD=\"$SA_PASSWORD\"" >> /usr/local/lib/R/etc/Renviron.site
 fi
 
 # start RStudio Server
