@@ -16,7 +16,7 @@
 #         -e 'ACCEPT_EULA=Y' \
 #         -e 'SA_PASSWORD=yourStrong(!)Password' \
 #         nhanes-workbench
-
+options(timeout=100)
 optionList = list(
   optparse::make_option(c("--container-build"), type="logical", default=FALSE, 
                         help="is this script running inside of a container build process", metavar="logical"),
@@ -83,7 +83,7 @@ htmlFileList = readLines(comprehensiveHtmlDataList)
 htmlTableStartLine = grep(x = htmlFileList, pattern = "<table")
 htmlTableEndLine = grep(x = htmlFileList, pattern = "</table")
 
-if (length(htmlTableStartLine) != 1 || length(htmlTableEndLine) != 1 ) {
+if (length(htmlTableStartLine) != 1 | length(htmlTableEndLine) != 1 ) {
   stop(
     paste(
       "The original HTML file listing at", 
@@ -169,7 +169,7 @@ if (!opt[["include-exclusions"]]){
   SqlTools::dbSendUpdate(cn, "CREATE SCHEMA Ontology")
 }
 
-  SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
+SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
 
 # prevent scientific notation
 options(scipen = 15)
@@ -189,7 +189,7 @@ downloadErrors = dplyr::tibble(
  )
 
 for (i in i:length(dataTypes)) {
-
+# for (i in 1:500) {
     # get the name of the data type
     currDataType = dataTypes[i]
 
@@ -247,7 +247,7 @@ for (i in i:length(dataTypes)) {
         return("error")
       })
 
-      if (result == "warning" || result == "error") {
+      if (typeof(result)!='list') {
         next
       }
 
@@ -257,6 +257,7 @@ for (i in i:length(dataTypes)) {
         result = dplyr::bind_cols(result, years)
       }
 
+
       questionnaireVariables =
         dplyr::bind_rows(
           questionnaireVariables, 
@@ -264,7 +265,7 @@ for (i in i:length(dataTypes)) {
             "Variable" = colnames(result),
             "TableName" = rep(currDataType, times = ncol(result))
           )
-        )  
+        )
 
       dfList[[length(dfList) + 1]] = result
       rm(result)
@@ -314,7 +315,7 @@ for (i in i:length(dataTypes)) {
         for (currCharColumn in ixCharacterColumns) {
 
           # fix any embedded line endings
-          m[,currCharColumn] = gsub(pattern = "[\r\n]", replacement = "", x = dplyr::pull(m[,currCharColumn]))
+          m[,currCharColumn] = gsub(pattern = "[\r\n]", replacement = "", x = dplyr::pull(m[,currCharColumn]), useBytes = TRUE)
         }
       }
 

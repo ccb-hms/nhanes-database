@@ -41,4 +41,3 @@ fi
 
 # rocker/shiny runs this by default
 /init
-
