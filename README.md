@@ -19,12 +19,13 @@ The [Testing/Code](https://github.com/ccb-hms/NHANES/tree/main/Testing/Code) fol
 * `containerBuildTests.R` contains all tests completed at build time.
 
 ## Running the image
-An image with a pre-built database can be run as follows: (for other versions, see the [Dockerhub repository](https://hub.docker.com/r/hmsccb/nhanes-workbench/tags.) and use the desired tag. The current release is hmsccb/nhanes-workbench:version-0.1.0):
+An image with the current pre-built database can be run as follows:
 
 ```
 docker \
     run \
         --rm \
+        --platform=linux/amd64 \
         --name nhanes-workbench \
         -d \
         -v LOCAL_DIRECTORY:/HostData \
@@ -35,8 +36,10 @@ docker \
         -e 'CONTAINER_USER_PASSWORD=PASSWORD' \
         -e 'ACCEPT_EULA=Y' \
         -e 'SA_PASSWORD=yourStrong(!)Password' \
-        hmsccb/nhanes-workbench:latest
+        hmsccb/nhanes-workbench:version-0.1.2
 ```
+
+For other versions, see the [Dockerhub repository](https://hub.docker.com/r/hmsccb/nhanes-workbench/tags) and use the desired tag.
 
 ### Parameters
 
