@@ -25,15 +25,16 @@ fi
 # to run SQL Server
 if [[ $ACCEPT_EULA == "Y" && ! -z $SA_PASSWORD ]]
 then
-	runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &'
-	
+	export MSSQL_SA_PASSWORD=$SA_PASSWORD
+	runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr  --accept-eula --reset-sa-password &'
+		
 	# make the SA password available to all users
 	echo "SA_PASSWORD=\"$SA_PASSWORD\"" >> /etc/environment
 	echo "SA_PASSWORD=\"$SA_PASSWORD\"" >> /usr/local/lib/R/etc/Renviron.site
 fi
 
-# start RStudio Server
-/usr/sbin/rstudio-server restart
-
 # start sshd
-/usr/sbin/sshd -D
+/usr/sbin/sshd -D &
+
+# rocker/shiny runs this by default
+/init
