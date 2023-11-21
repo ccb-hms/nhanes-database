@@ -132,8 +132,9 @@ questionnaireToRaw = "
                     "
 
 if (nrow(DBI::dbGetQuery(cn, questionnaireToRaw))>0) {
-    print(paste("Tables found in RAW schema that do not exist in QuestionnaireDescriptions: ", DBI::dbGetQuery(cn, questionnaireToRaw)), sep='')
+    stop(paste("Tables found in RAW schema that do not exist in QuestionnaireDescriptions: ", DBI::dbGetQuery(cn, questionnaireToRaw)), sep='')
 }
+
 ##################################################################################################################
 # TEST: All tables in QuestionnaireDescriptions schema are present in the db
 # RESULT: Returns QuestionnaireDescriptions tables that do not exist in RAW schema.

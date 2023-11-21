@@ -296,7 +296,7 @@ RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /tmp/NHANES-metadata
 
 RUN git fetch --tags
-RUN git checkout tags/v3.6.0
+RUN git checkout tags/v3.7.0
 	
 # install packages, which require newer version of rvest in conflict with the download / build script
 RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
@@ -323,43 +323,43 @@ RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.pos
 # ETL Variable Codebooks, Translate Tables
 #------------------------------------------------------------------------------
 
-WORKDIR /tmp/NHANES-metadata
+# WORKDIR /tmp/NHANES-metadata
 
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-	&& Rscript /NHANES/etlVariableCodebook.R
+# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+# 	&& Rscript /NHANES/etlVariableCodebook.R
 
-# translate the coded responses
-COPY Code/Sql/spTranslateTable.sql /NHANES/spTranslateTable.sql
-COPY Code/R/stageSprocs.R /NHANES/stageSprocs.R
-WORKDIR /NHANES
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-	&& Rscript /NHANES/stageSprocs.R
+# # translate the coded responses
+# COPY Code/Sql/spTranslateTable.sql /NHANES/spTranslateTable.sql
+# COPY Code/R/stageSprocs.R /NHANES/stageSprocs.R
+# WORKDIR /NHANES
+# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+# 	&& Rscript /NHANES/stageSprocs.R
 
-# run the script to translate the raw coded tables
-COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
-WORKDIR /NHANES
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-	&& Rscript /NHANES/translateRawTables.R
+# # run the script to translate the raw coded tables
+# COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
+# WORKDIR /NHANES
+# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+# 	&& Rscript /NHANES/translateRawTables.R
 
-#------------------------------------------------------------------------------
-# Final Odds and Ends
-#------------------------------------------------------------------------------
+# #------------------------------------------------------------------------------
+# # Final Odds and Ends
+# #------------------------------------------------------------------------------
 
-# allow modification of these locations so users can install R packages without warnings
-RUN chmod -R 777 /usr/local/lib/R/library
-RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
+# # allow modification of these locations so users can install R packages without warnings
+# RUN chmod -R 777 /usr/local/lib/R/library
+# RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
 
-# Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION v0.1.2
-ENV EPICONDUCTOR_COLLECTION_DATE 2023-11-07
+# # Declare which version of the container this is, and make it available inside the container 
+# ENV EPICONDUCTOR_CONTAINER_VERSION v0.1.2
+# ENV EPICONDUCTOR_COLLECTION_DATE 2023-11-07
 
-RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron.site
-RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron.site
+# RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron.site
+# RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron.site
 
-RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/environment
-RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/environment
+# RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/environment
+# RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/environment
 
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-	&& Rscript /NHANES/containerBuildTests.R
+# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+# 	&& Rscript /NHANES/containerBuildTests.R
 
 CMD ["/startup/startup.sh"]
