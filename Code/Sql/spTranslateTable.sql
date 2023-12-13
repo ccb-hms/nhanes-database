@@ -12,7 +12,7 @@ AS
     
     -- check that the variable codebook actually has data for this table
     DECLARE @variableTranslationCount INT
-    SELECT @variableTranslationCount = COUNT(*) FROM Metadata.VariableCodebook C WHERE C.TableName = @SourceTableName
+    SELECT @variableTranslationCount = COUNT(*) FROM Metadata.VariableCodebook C WHERE C.[Table] = @SourceTableName
     
     -- if there are no translatable variables for this table, just copy it over
     IF @variableTranslationCount = 0
@@ -79,7 +79,7 @@ AS
     FROM 
         #tmpColNames C 
         INNER JOIN Metadata.VariableCodebook V ON
-            V.TableName = @SourceTableName
+            V.[Table] = @SourceTableName
             AND C.COLUMN_NAME = V.Variable
             AND V.ValueDescription = 'Range of Values'
     WHERE C.COLUMN_NAME != @pkColName
@@ -182,7 +182,7 @@ AS
             LEFT OUTER JOIN Metadata.VariableCodebook V ON 
                 T.Variable = V.Variable 
                 AND CAST(T.Response AS VARCHAR(256)) = CAST(V.CodeOrValue AS VARCHAR(256))
-                AND V.TableName = ''' + @SourceTableName + '''        
+                AND V.[Table] = ''' + @SourceTableName + '''        
     '
     
     -- debugging

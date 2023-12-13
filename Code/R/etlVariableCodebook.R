@@ -14,8 +14,6 @@ tablesFile = paste(sep = "/", getwd(), "metadata/nhanes_tables.tsv")
 variablesFile = paste(sep = "/", getwd(), "metadata/nhanes_variables.tsv")
 ontologyMappings = paste(sep = "/", getwd(), "ontology-mappings/")
 ontologyTables = paste(sep = "/", getwd(), "ontology-tables/")
-excludedTables = "/NHANES/excluded_tables.tsv"
-
 
 # parameters to connect to SQL
 sqlHost = "localhost"
@@ -61,7 +59,7 @@ suppressWarnings({
 SqlTools::dbSendUpdate(cn, "
     CREATE TABLE NhanesLandingZone.Metadata.VariableCodebook (
         Variable varchar(64),
-        TableName varchar(64),
+        [Table] varchar(64),
         CodeOrValue varchar(64),
         ValueDescription varchar(256),
         Count int,
@@ -73,33 +71,10 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT NhanesLandingZone.Metadata.VariableCodebook FROM '", codebookFile, "'
-    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t', ROWTERMINATOR = '\n')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
-
-#TODO: make this table more comprehensive, to invlude suffixes as well as prefixes
-# create the ExcludedTables table in SQL
-SqlTools::dbSendUpdate(cn, "
-    CREATE TABLE NhanesLandingZone.Metadata.ExcludedTables (
-        TableName varchar(64),
-        Reason varchar(64)
-    )
-")
-
-# run bulk insert
-insertStatement = paste(sep="", "
-    BULK INSERT NhanesLandingZone.Metadata.ExcludedTables FROM '", excludedTables, "'
-    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\r\n')")
-
-
-SqlTools::dbSendUpdate(cn, insertStatement)
-
-# shrink transaction log
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
-
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
 # load the table descriptions
 
@@ -121,7 +96,7 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT ##tmp_nhanes_tables FROM '", tablesFile, "'
-    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
@@ -182,7 +157,7 @@ SqlTools::dbSendUpdate(cn, "
         [Table] varchar(64),
         SASLabel varchar(64),
         EnglishText varchar(1024),
-        Target varchar(128),
+        Target varchar(max),
         UseConstraints varchar(128),
         ProcessedText varchar(1024),
         Tags varchar(1024),
@@ -200,14 +175,15 @@ insertStatement = paste(sep="", "
 
 SqlTools::dbSendUpdate(cn, insertStatement)
 
+
 # add columns to QuestionnaireVariables table to accommodate additional data
 SqlTools::dbSendUpdate(cn, "
     ALTER TABLE NhanesLandingZone.Metadata.QuestionnaireVariables 
     ADD 
         Description varchar(1024) NULL, 
-        Target varchar(128) NULL,
+        Target varchar(max) NULL,
         SasLabel varchar(64),
-        UseConstraints varchar(64),
+        UseConstraints varchar(128),
         ProcessedText varchar(1024),
         Tags varchar(1024),
         VariableID varchar(1024),

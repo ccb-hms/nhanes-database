@@ -20,7 +20,7 @@ options(timeout=100)
 optionList = list(
   optparse::make_option(c("--container-build"), type="logical", default=FALSE, 
                         help="is this script running inside of a container build process", metavar="logical"),
-                  
+   
   optparse::make_option(c("--include-exclusions"), type="logical", default=FALSE, 
                         help="whether or not to exclude the tables in Code/R/excluded_tables.tsv", metavar="logical")
 ); 
@@ -39,6 +39,7 @@ sqlHost = "localhost"
 sqlUserName = "sa"
 sqlPassword = "yourStrong(!)Password"
 sqlDefaultDb = "master"
+
 
 # loop waiting for SQL Server database to become available
 for (i in 1:60) {
@@ -77,60 +78,36 @@ persistTextFiles = FALSE
 
 outputDirectory = "/NHANES/Data"
 
-# Try using the comprehensive listing
-comprehensiveHtmlDataList = "https://wwwn.cdc.gov/nchs/nhanes/search/datapage.aspx"
-htmlFileList = readLines(comprehensiveHtmlDataList)
-htmlTableStartLine = grep(x = htmlFileList, pattern = "<table")
-htmlTableEndLine = grep(x = htmlFileList, pattern = "</table")
-
-if (length(htmlTableStartLine) != 1 | length(htmlTableEndLine) != 1 ) {
-  stop(
-    paste(
-      "The original HTML file listing at", 
-      comprehensiveHtmlDataList, 
-      "contained only one table.  You will need to do some investigation and debugging."
-    )
-  )                                                   
-}
-
-# Convert the HTML table to a data frame so we can iterate on the rows
-htmlObj = xml2::read_html(paste(collapse="\n", htmlFileList[htmlTableStartLine : htmlTableEndLine]))
-
-fileListTable = dplyr::`%>%`(htmlObj, rvest::html_table())[[1]]
-
-# Create a new column 'Data File Name' populated with each file name from the 'Doc File' column without ' Doc'. eg. 'ACQ_D Doc' -> 'ACQ_D'
-fileListTable$'Data File Name' <- gsub(" Doc","",as.character(fileListTable$'Doc File'))
-
-# Some years in the year column do not match up with the year value in the url. eg. 'SSHCV' year 
-# column shows '2007-2012' but the url is https://wwwn.cdc.gov/Nchs/Nhanes/2007-2008/SSHCV_E.XPT.
-# lines 75-78 correct where this occurs in the table
-fileListTable$Years[fileListTable$Years == "1988-2020"] <- '1999-2000'
-fileListTable$Years[fileListTable$Years == "2007-2012"] <- '2007-2008'
-fileListTable$Years[fileListTable$Years == "1999-2004"] <- '1999-2000'
-fileListTable$Years[fileListTable$Years == "1999-2020"] <- '1999-2000'
-fileListTable$Years[fileListTable$Years == "2017-2020"] <- '2017-2018'
-
-# Replace the hyperlink in the Doc File column with the full url
-fileListTable$'Doc File' <- glue::glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Doc File'}.htm")
-fileListTable$'Doc File'<-gsub(" Doc","",as.character(fileListTable$'Doc File'))
-
-# Replace the hyperlink in the Data File column with the full url
-fileListTable$'Data File' <- glue::glue("https://wwwn.cdc.gov/Nchs/Nhanes/{fileListTable$Years}/{fileListTable$'Data File'}.XPT")
-fileListTable$'Data File'<- gsub('([A-z]+) .*', '\\1', as.character(fileListTable$'Data File'))
-fileListTable$'Data File' <- paste0(fileListTable$'Data File', ".XPT")
-fileListTable$'Data File'<-gsub(" Data","",as.character(fileListTable$'Data File'))
+fileListTable = nhanesA::nhanesManifest("public")
 
 excludedTables = read.csv("/NHANES/excluded_tables.tsv", sep='\t')
+ex <- nhanesA::nhanesManifest("limited")['Table']
+reasons <- rep("Limited Access",length(ex))
+ex <- cbind(ex, reasons)
+colnames(ex)[colnames(ex) == "Table"] ="TableName"
+colnames(ex)[colnames(ex) == "reasons"] ="Reason"
+excludedTables <- rbind(excludedTables, ex) 
+
+# write the table to file
+write.table(
+  excludedTables,
+  file = "/NHANES/excluded_tables.tsv",
+  sep = "\t",
+  na = "",
+  row.names = FALSE,
+  col.names = FALSE,
+  quote = FALSE
+)
 
 if (!opt[["include-exclusions"]]) {
-    fileListTable <- fileListTable[!grepl(paste(excludedTables$TableName, collapse = "|"), fileListTable$'Data File Name'),]
+    fileListTable <- fileListTable[!grepl(paste(excludedTables$TableName, collapse = "|"), fileListTable$'Table'),]
 } else{
-    fileListTable <- fileListTable[grepl(paste(excludedTables$TableName, collapse = "|"), fileListTable$'Data File Name'),]  
+    fileListTable <- fileListTable[grepl(paste(excludedTables$TableName, collapse = "|"), fileListTable$'Table'),]  
  }
 
 # enumerate distinct data types
-fileListTable$"Data File Name" <- strtrim(fileListTable$"Data File Name", 128)
-dataTypes = unique(fileListTable$"Data File Name")
+fileListTable$"Table" <- strtrim(fileListTable$"Table", 128)
+dataTypes = unique(fileListTable$"Table")
 
 # fix case-differing strings
 dataTypes = sort(dataTypes)
@@ -141,21 +118,6 @@ representativeStringIndex = unlist(lapply(uniqueUpper, FUN=function(upperCaseWor
 names(uniqueUpper) = dataTypes[representativeStringIndex]
 dataTypes = names(uniqueUpper)
 names(dataTypes) = uniqueUpper
-
-cnames = colnames(fileListTable)
-fileListTable = cbind(fileListTable,  dataTypes[toupper(fileListTable$"Data File Name")])
-colnames(fileListTable) = c(cnames, "ScrubbedDataType")
-
-#--------------------------------------------------------------------------------------------------------
-# performance notes for large XPTs:
-# 14.6G for a single PAXMIN
-# 10G after gc()
-# baloons to 32G after second read
-# 20G after gc()
-# 40 G during bind_rows
-# 20 G after rm XPTs and gc()
-# 12G file 
-#--------------------------------------------------------------------------------------------------------
 
 
 if (!opt[["include-exclusions"]]){
@@ -171,6 +133,27 @@ if (!opt[["include-exclusions"]]){
 
 SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
 
+# create the ExcludedTables table in SQL
+SqlTools::dbSendUpdate(cn, "
+    CREATE TABLE NhanesLandingZone.Metadata.ExcludedTables (
+        TableName varchar(64),
+        Reason varchar(64)
+    )
+")
+
+# run bulk insert
+insertStatement = paste(sep="", "
+    BULK INSERT NhanesLandingZone.Metadata.ExcludedTables FROM '/NHANES/excluded_tables.tsv'
+    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')")
+
+SqlTools::dbSendUpdate(cn, insertStatement)
+
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
 # prevent scientific notation
 options(scipen = 15)
 
@@ -179,6 +162,18 @@ questionnaireVariables = dplyr::tibble(
   Variable=character(), 
   TableName=character()
 )
+
+#--------------------------------------------------------------------------------------------------------
+# performance notes for large XPTs:
+# 14.6G for a single PAXMIN
+# 10G after gc()
+# baloons to 32G after second read
+# 20G after gc()
+# 40 G during bind_rows
+# 20 G after rm XPTs and gc()
+# 12G file 
+#--------------------------------------------------------------------------------------------------------
+
 
 # enable restart
 i=1
@@ -189,12 +184,11 @@ downloadErrors = dplyr::tibble(
  )
 
 for (i in i:length(dataTypes)) {
-# for (i in 1:500) {
     # get the name of the data type
-    currDataType = dataTypes[i]
+    currDataType = toupper(dataTypes[i])
 
     # find all rows with URLs that should be relevant to the current data type
-    rowsForCurrDataType = which(fileListTable[,"ScrubbedDataType"] == currDataType)
+    rowsForCurrDataType = which(fileListTable[,"Table"] == currDataType)
 
     # assemble a list containing all of the subtables for this data type
     dfList = list()
@@ -203,28 +197,17 @@ for (i in i:length(dataTypes)) {
     for (currRow in rowsForCurrDataType) {
 
       # get the URL for the SAS file pointed to by the current row
-      currFileUrl = fileListTable[currRow, "Data File"]
+      currFileUrl = fileListTable[currRow, "DataURL"]
 
       # get the date range for this table
       currYears = fileListTable[currRow, "Years"]
-
-      # split the URL on '/' to extract the file name
-      urlSplit = strsplit(x = currFileUrl, split = "/", fixed = TRUE)[[1]]
-      fileName  = urlSplit[length(urlSplit)]
 
       #TODO move these to the exlusions group above^^^
       cat("reading ", currFileUrl, "\n")
 
       # attempt to download each file and log errors
       result = tryCatch({
-        currTemp = tempfile()
-        utils::download.file(
-          url = currFileUrl, 
-          destfile = currTemp
-        )
-        z = haven::read_xpt(currTemp)
-        file.remove(currTemp)
-        z
+        nhanesA::nhanesFromURL(currFileUrl, translated = FALSE)
       }, warning = function(w) {
         downloadErrors <<- dplyr::bind_rows(
           downloadErrors, 
@@ -257,12 +240,11 @@ for (i in i:length(dataTypes)) {
         result = dplyr::bind_cols(result, years)
       }
 
-
       questionnaireVariables =
         dplyr::bind_rows(
           questionnaireVariables, 
           dplyr::bind_cols( 
-            "Variable" = colnames(result),
+            "Variable" = toupper(colnames(result)),
             "TableName" = rep(currDataType, times = ncol(result))
           )
         )
@@ -315,7 +297,7 @@ for (i in i:length(dataTypes)) {
         for (currCharColumn in ixCharacterColumns) {
 
           # fix any embedded line endings
-          m[,currCharColumn] = gsub(pattern = "[\r\n]", replacement = "", x = dplyr::pull(m[,currCharColumn]), useBytes = TRUE)
+          m[,currCharColumn] = gsub(m[,currCharColumn], pattern = "\r\n", replacement = "", useBytes = TRUE, fixed = TRUE)
         }
       }
 
@@ -358,7 +340,7 @@ for (i in i:length(dataTypes)) {
                               currDataType,
                               " FROM '",
                               currOutputFileName,
-                              "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+                              "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t', ROWTERMINATOR = '\n')"
       )
 
       SqlTools::dbSendUpdate(cn, insertStatement)
