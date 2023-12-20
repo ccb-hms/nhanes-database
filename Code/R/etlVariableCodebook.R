@@ -59,7 +59,7 @@ suppressWarnings({
 SqlTools::dbSendUpdate(cn, "
     CREATE TABLE NhanesLandingZone.Metadata.VariableCodebook (
         Variable varchar(64),
-        [Table] varchar(64),
+        TableName varchar(64),
         CodeOrValue varchar(64),
         ValueDescription varchar(256),
         Count int,
@@ -68,13 +68,18 @@ SqlTools::dbSendUpdate(cn, "
     )
 ")
 
-# run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT NhanesLandingZone.Metadata.VariableCodebook FROM '", codebookFile, "'
     WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
+
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
 # load the table descriptions
 
@@ -86,7 +91,7 @@ SqlTools::dbSendUpdate(cn, "
         BeginYear int,
         EndYear int,
         DataGroup varchar(64),
-        UseConstraints varchar(64),
+        UseConstraints varchar(128),
         DocFile varchar(1024),
         DataFile varchar(1024),
         DatePublished varchar(1024)
@@ -147,7 +152,6 @@ SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-
 # load the variable descriptions
 
 # create the nhanes_tables table in SQL
@@ -162,6 +166,7 @@ SqlTools::dbSendUpdate(cn, "
         ProcessedText varchar(1024),
         Tags varchar(1024),
         VariableID varchar(1024),
+        IsPhenotype varchar(1024),
         OntologyMapped varchar(1024)
     )
 ")
@@ -175,6 +180,17 @@ insertStatement = paste(sep="", "
 
 SqlTools::dbSendUpdate(cn, insertStatement)
 
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [Variable] = REPLACE([Variable], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [Table] = REPLACE([Table], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [SasLabel] = REPLACE([SasLabel], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [EnglishText] = REPLACE([EnglishText], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [Target] = REPLACE([Target], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [UseConstraints] = REPLACE([UseConstraints], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [ProcessedText] = REPLACE([ProcessedText], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [Tags] = REPLACE([Tags], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [VariableID] = REPLACE([VariableID], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [IsPhenotype] = REPLACE([IsPhenotype], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [OntologyMapped] = REPLACE([OntologyMapped], CHAR(34), '')")
 
 # add columns to QuestionnaireVariables table to accommodate additional data
 SqlTools::dbSendUpdate(cn, "
@@ -187,6 +203,7 @@ SqlTools::dbSendUpdate(cn, "
         ProcessedText varchar(1024),
         Tags varchar(1024),
         VariableID varchar(1024),
+        IsPhenotype varchar(1024),
         OntologyMapped varchar(1024)
 ")
 
@@ -202,7 +219,8 @@ SqlTools::dbSendUpdate(cn, "
         Q.ProcessedText = V.ProcessedText,
         Q.Tags = V.Tags,
         Q.VariableID = V.VariableID,
-        Q.OntologyMapped = V.OntologyMapped    
+        Q.IsPhenotype = V.IsPhenotype,
+        Q.OntologyMapped = V.OntologyMapped   
     FROM 
         NhanesLandingZone.Metadata.QuestionnaireVariables Q
         INNER JOIN ##tmp_nhanes_variables V ON

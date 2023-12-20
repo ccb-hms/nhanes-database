@@ -88,10 +88,10 @@ mismatchedCols(DownloadErrors,"DownloadErrors")
 QuestionnaireDescriptions = c("Description", "TableName", "BeginYear", "EndYear", "DataGroup", "UseConstraints", "DocFile", "DataFile", "DatePublished")
 mismatchedCols(QuestionnaireDescriptions, "QuestionnaireDescriptions")
 
-QuestionnaireVariables = c("Variable", "TableName", "Description", "Target", "SasLabel", "UseConstraints","ProcessedText","Tags","VariableID","OntologyMapped")
+QuestionnaireVariables = c("Variable", "TableName", "Description", "Target", "SasLabel", "UseConstraints","ProcessedText","Tags","VariableID","IsPhenotype","OntologyMapped")
 mismatchedCols(QuestionnaireVariables, "QuestionnaireVariables")
 
-VariableCodebook = c("Variable", "Table", "CodeOrValue", "ValueDescription", "Count", "Cumulative", "SkipToItem")
+VariableCodebook = c("Variable", "TableName", "CodeOrValue", "ValueDescription", "Count", "Cumulative", "SkipToItem")
 mismatchedCols(VariableCodebook, "VariableCodebook")
 
 dbxrefs = c("Subject", "Object", "Ontology")
@@ -247,13 +247,13 @@ for (i in 1:nrow(allTableNames)) {
 # TEST: Pull the raw and translated version of each table, join on SEQN column, then pair up each column and confirm that the rows are the same
 # RESULT: Returns any tables where the rows differ between Raw and Translated
 ##################################################################################################################################################
-codebook = DBI::dbGetQuery(cn, "SELECT  Variable, [Table], CodeOrValue, ValueDescription, Count FROM [NhanesLandingZone].[Metadata].[VariableCodebook]")
+codebook = DBI::dbGetQuery(cn, "SELECT  Variable, TableName, CodeOrValue, ValueDescription, Count FROM [NhanesLandingZone].[Metadata].[VariableCodebook]")
 excluded = DBI::dbGetQuery(cn, "SELECT  TableName FROM [NhanesLandingZone].[Metadata].[ExcludedTables]")
 
 for (i in 1:nrow(codebook)) {
     valueDescription = codebook[i, "ValueDescription"]
     variable = codebook[i, "Variable"]
-    tableName = codebook[i, "Table"]
+    tableName = codebook[i, "TableName"]
     
     if (any(excluded == 'tableName')){
         checkEqualQuery = DBI::dbGetQuery(cn, paste(sep="", "SELECT  * FROM 
