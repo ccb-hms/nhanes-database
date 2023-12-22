@@ -353,6 +353,7 @@ RUN chmod -R 777 /usr/local/lib/R/library
 RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
 
 # Declare which version of the container this is, and make it available inside the container 
+
 ENV EPICONDUCTOR_CONTAINER_VERSION v0.3.0
 ENV EPICONDUCTOR_COLLECTION_DATE 2023-12-19
 
