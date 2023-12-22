@@ -247,27 +247,94 @@ for (i in 1:nrow(allTableNames)) {
 # TEST: Pull the raw and translated version of each table, join on SEQN column, then pair up each column and confirm that the rows are the same
 # RESULT: Returns any tables where the rows differ between Raw and Translated
 ##################################################################################################################################################
-codebook = DBI::dbGetQuery(cn, "SELECT  Variable, TableName, CodeOrValue, ValueDescription, Count FROM [NhanesLandingZone].[Metadata].[VariableCodebook]")
+translationErrors = dplyr::tibble(
+  TableName=character(), 
+  Variable=character(),
+  Error=character()
+ )
+
+SqlTools::dbSendUpdate(cn, "CREATE TABLE Metadata.TranslationErrors (TableName varchar(1024), Variable varchar(1024), Error varchar(256))")
+
+codebook = DBI::dbGetQuery(cn, "SELECT  DISTINCT(Variable), TableName FROM [NhanesLandingZone].[Metadata].[VariableCodebook] ORDER BY TableName ASC")
 excluded = DBI::dbGetQuery(cn, "SELECT  TableName FROM [NhanesLandingZone].[Metadata].[ExcludedTables]")
 
+checkTranslation <- function(tableName, variable){
+                                    if (!any(excluded == tableName)){
+                                        checkSeqn = DBI::dbGetQuery(cn, paste(sep="", "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+                                                            WHERE TABLE_NAME = '", tableName, "'
+                                                            AND TABLE_SCHEMA = 'Raw' 
+                                                            AND TABLE_CATALOG='NhanesLandingZone'"))
+                                        
+                                        if (any(checkSeqn == 'SEQN')){
+                                            checkEqualQuery = DBI::dbGetQuery(cn, paste(sep="", "SELECT  * FROM 
+                                                                (SELECT A.", variable, " as ", variable, "a, B.", variable, " as ", variable, "b
+                                                                FROM [NhanesLandingZone].[Raw].[", tableName, "] A
+                                                                INNER JOIN [NhanesLandingZone].[Translated].[", tableName, "] B
+                                                                ON A.SEQN = B.SEQN) as tmp
+                                                                WHERE ", variable, "b IS NULL AND ", variable, "a IS NOT NULL;"))
+                                            
+                                            if (nrow(checkEqualQuery)>0) {
+                                                translationErrors <<- dplyr::bind_rows(
+                                                                    translationErrors, 
+                                                                    dplyr::bind_cols(
+                                                                        "TableName" = tableName, 
+                                                                        "Variable" = variable,
+                                                                        "Error" = paste(sep='', "Translated table ", tableName, " has a null value that exists in the raw table for variable: ", variable)
+                                                                    )
+                                                                    )
+                                            }
+                                        }
+                                    }
+                                }
+                                
+logError <- function(tableName, variable){
+    translationErrors <<- dplyr::bind_rows(
+                                            translationErrors, 
+                                            dplyr::bind_cols(
+                                                "TableName" = tableName, 
+                                                "Variable" = variable,
+                                                "Error" = paste(sep='', "Translated table ", tableName, " has a null value that exists in the raw table for variable: ", variable)
+                                            )
+                                            )
+}
 for (i in 1:nrow(codebook)) {
-    valueDescription = codebook[i, "ValueDescription"]
     variable = codebook[i, "Variable"]
     tableName = codebook[i, "TableName"]
     
-    if (any(excluded == 'tableName')){
-        checkEqualQuery = DBI::dbGetQuery(cn, paste(sep="", "SELECT  * FROM 
-                            (SELECT A.", variable, " as ", variable, "a, B.", variable, " as ", variable, "b
-                            FROM [NhanesLandingZone].[Raw].[", tableName, "] A
-                            INNER JOIN [NhanesLandingZone].[Translated].[", tableName, "] B
-                            ON A.SEQN = B.SEQN) as tmp
-                            WHERE ", variable, "b IS NULL AND ", variable, "a IS NOT NULL;"))
-        
-        if (nrow(checkEqualQuery)>0) {
-            stop(paste("Translated table ", tableName, " has a null value that exists in the raw table for variable: ", variable), sep='')
-        }
+    x <- tryCatch({
+    checkTranslation(tableName, variable)
+    },
+    error = function(e) {
+        logError(tableName, variable)
     }
+    )
 }
 
 
+outputDirectory = "/NHANES/Data"
 
+# generate file name for temporary output
+currOutputFileName = paste(sep = "/", outputDirectory, "TranslationErrors.txt")
+
+# write failed file downloads table to disk
+write.table(
+  translationErrors,
+  file = currOutputFileName,
+  sep = "\t",
+  na = "",
+  append=TRUE,
+  row.names = FALSE,
+  col.names = FALSE,
+  quote = FALSE
+)
+
+# issue BULK INSERT
+insertStatement = paste(sep="",
+                        "BULK INSERT ",
+                        "Metadata.TranslationErrors",
+                        " FROM '",
+                        currOutputFileName,
+                        "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+)
+
+SqlTools::dbSendUpdate(cn, insertStatement)
