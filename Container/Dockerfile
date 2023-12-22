@@ -212,10 +212,13 @@ RUN Rscript -e "remotes::install_cran('mitools')"
 RUN Rscript -e "remotes::install_cran('tinytex')"
 RUN Rscript -e "remotes::install_cran('bookdown')"
 RUN Rscript -e "remotes::install_cran('reshape')"
+RUN Rscript -e "remotes::install_cran('lme4')"
+RUN Rscript -e "remotes::install_cran('survminer')"
+RUN Rscript -e "remotes::install_cran('rvest')"
 
-# -- vanilla because there is a bug that causes the R intro / preamble text to get pushed into the compiler
-RUN Rscript --vanilla -e "remotes::install_cran('lme4', repos='"$R_REPOSITORY"')"
-RUN Rscript --vanilla -e "remotes::install_cran('survminer', repos='"$R_REPOSITORY"')"
+# # -- vanilla because there is a bug that causes the R intro / preamble text to get pushed into the compiler
+# RUN Rscript --vanilla -e "remotes::install_cran('lme4', repos='"$R_REPOSITORY"')"
+# RUN Rscript --vanilla -e "remotes::install_cran('survminer', repos='"$R_REPOSITORY"')"
 
 # install R packages for connecting to SQL Server and working with resulting data sets
 RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/FactToCube.git', ref='v1.0.0')"
@@ -231,9 +234,9 @@ RUN Rscript -e "remotes::install_cran('jsonlite')"
 RUN Rscript -e "remotes::install_cran('viridis')"
 RUN Rscript -e "remotes::install_cran('optparse')"
 
-# need old version of rvest in order for the hack that parses URLs to work in the NHANES download script
-RUN Rscript -e "remove.packages('rvest')"
-RUN Rscript -e "remotes::install_cran('rvest', repos='https://packagemanager.posit.co/cran/__linux__/focal/2021-01-29')"
+# # need old version of rvest in order for the hack that parses URLs to work in the NHANES download script
+# RUN Rscript -e "remove.packages('rvest')"
+# RUN Rscript -e "remotes::install_cran('rvest', repos='https://packagemanager.posit.co/cran/__linux__/focal/2021-01-29')"
 
 #install nhanesA and phonto from github in order to have the latest version (CRAN will take a while to update)
 RUN Rscript -e "devtools::install_github('ccb-hms/phonto')"
@@ -281,7 +284,7 @@ RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
 # run the download and database build
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \ 
 	&& Rscript /NHANES/download.R --container-build=TRUE
-	
+
 # run the ETL process to load variable metadata
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
 WORKDIR /tmp
@@ -296,32 +299,32 @@ RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /tmp/NHANES-metadata
 
 RUN git fetch --tags
-RUN git checkout tags/v3.6.0
-	
+RUN git checkout tags/v3.8.2
+
 # install packages, which require newer version of rvest in conflict with the download / build script
 RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
 
-# # ------------------------------------------------------------------------------
-# # Optional: NHANES-metadata Creation Process 
-# # ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Optional: NHANES-metadata Creation Process 
+# ------------------------------------------------------------------------------
 
-# # RUN python3.9 -m pip install pydantic==1.7
-# # RUN python3.9 -m pip install pandas==2.0.2
-# # RUN python3.9 -m pip install Owlready2==0.40
-# # RUN python3.9 -m pip install text2term==2.3.2
+# RUN python3.9 -m pip install pydantic==1.7
+# RUN python3.9 -m pip install pandas==2.0.2
+# RUN python3.9 -m pip install Owlready2==0.40
+# RUN python3.9 -m pip install text2term==2.3.2
 
-# # WORKDIR /tmp/NHANES-metadata/code
+# WORKDIR /tmp/NHANES-metadata/code
 
-# # RUN Rscript get_nhanes_metadata.R
+# RUN Rscript get_nhanes_metadata.R
 
-# # RUN python3.9 generate_ontology_tables.py
-# # RUN python3.9 generate_ontology_mappings.py
-# # RUN python3.9 generate_nhanes_mapping_report.py
-# # ------------------------------------------------------------------------------
+# RUN python3.9 generate_ontology_tables.py
+# RUN python3.9 generate_ontology_mappings.py
+# RUN python3.9 generate_nhanes_mapping_report.py
+# ------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # ETL Variable Codebooks, Translate Tables
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 WORKDIR /tmp/NHANES-metadata
 
@@ -350,8 +353,9 @@ RUN chmod -R 777 /usr/local/lib/R/library
 RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
 
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION v0.2.0
-ENV EPICONDUCTOR_COLLECTION_DATE 2023-11-21
+
+ENV EPICONDUCTOR_CONTAINER_VERSION v0.3.0
+ENV EPICONDUCTOR_COLLECTION_DATE 2023-12-19
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron.site
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron.site

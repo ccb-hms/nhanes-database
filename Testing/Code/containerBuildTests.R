@@ -1,5 +1,6 @@
 # containerBuildTests.R
 # Tests to be run post-build on the NHANES db to verify completion and consistency in the data.
+# TODO: Print the results of this test to a .RMD file, send to github 
 
 # parameters to connect to SQL
 sqlHost = "localhost"
@@ -84,38 +85,29 @@ mismatchedCols <- function(cols, tableName){
 DownloadErrors = c("DataType", "FileUrl", "Error")
 mismatchedCols(DownloadErrors,"DownloadErrors")
 
-
 QuestionnaireDescriptions = c("Description", "TableName", "BeginYear", "EndYear", "DataGroup", "UseConstraints", "DocFile", "DataFile", "DatePublished")
 mismatchedCols(QuestionnaireDescriptions, "QuestionnaireDescriptions")
 
-
-QuestionnaireVariables = c("Variable", "TableName", "Description", "Target", "SasLabel", "UseConstraints","ProcessedText","Tags","VariableID","OntologyMapped")
+QuestionnaireVariables = c("Variable", "TableName", "Description", "Target", "SasLabel", "UseConstraints","ProcessedText","Tags","VariableID","IsPhenotype","OntologyMapped")
 mismatchedCols(QuestionnaireVariables, "QuestionnaireVariables")
-
 
 VariableCodebook = c("Variable", "TableName", "CodeOrValue", "ValueDescription", "Count", "Cumulative", "SkipToItem")
 mismatchedCols(VariableCodebook, "VariableCodebook")
 
-
 dbxrefs = c("Subject", "Object", "Ontology")
 mismatchedCols(dbxrefs, "dbxrefs")
-
 
 edges = c("Subject", "Object", "Ontology")
 mismatchedCols(edges, "edges")
 
-
 entailed_edges = c("Subject", "Object", "Ontology")
 mismatchedCols(entailed_edges, "entailed_edges")
-
 
 labels = c("Subject", "Object", "IRI", "DiseaseLocation", "Ontology", "Direct", "Inherited")
 mismatchedCols(labels, "labels")
 
-
 nhanes_variables_mappings = c("Variable", "TableName", "SourceTermID", "SourceTerm", "MappedTermLabel", "MappedTermCURIE", "MappedTermIRI", "MappingScore", "Tags", "Ontology")
 mismatchedCols(nhanes_variables_mappings, "nhanes_variables_mappings")
-
 
 ##################################################################################################################
 # TEST: All tables in RAW schema are present in QuestionnaireDescriptions (or ExcludedTables).
@@ -132,8 +124,9 @@ questionnaireToRaw = "
                     "
 
 if (nrow(DBI::dbGetQuery(cn, questionnaireToRaw))>0) {
-    print(paste("Tables found in RAW schema that do not exist in QuestionnaireDescriptions: ", DBI::dbGetQuery(cn, questionnaireToRaw)), sep='')
+    stop(paste("Tables found in RAW schema that do not exist in QuestionnaireDescriptions: ", DBI::dbGetQuery(cn, questionnaireToRaw)), sep='')
 }
+
 ##################################################################################################################
 # TEST: All tables in QuestionnaireDescriptions schema are present in the db
 # RESULT: Returns QuestionnaireDescriptions tables that do not exist in RAW schema.
@@ -147,10 +140,10 @@ rawToQuestionnaire = "
                     ORDER BY TableName ASC
                     "
 
-DBI::dbGetQuery(cn, rawToQuestionnaire) # returns any tables found
 if (nrow(DBI::dbGetQuery(cn, rawToQuestionnaire))>0) {
     stop(paste("Tables found in QuestionnaireDescriptions that do not exist in RAW schema: ", DBI::dbGetQuery(cn, rawToQuestionnaire)), sep='')
 }
+
 ##################################################################################################################
 # TEST: Raw and Translated tables have the same row counts
 # RESULT: 
@@ -181,9 +174,6 @@ rawToTranslated = "
                     AND TABLE_NAME NOT IN ( SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'Translated' )
                     ORDER BY TABLE_NAME ASC
                     "
-
-
-
 
 if (nrow(DBI::dbGetQuery(cn, rawToTranslated))>0) {
     stop(paste("RAW tables not found in TRANSLATED schema: ", DBI::dbGetQuery(cn, rawToTranslated)), sep='')
@@ -218,61 +208,133 @@ for (i in 1:nrow(allTableNames)) {
 }
 
 
-# Wishlist item, not pressing right now
-##################################################################################################################################################
-# TEST: In the VariableCodebook, there is a Count variable that represents the expected row counts for each value. Test that these are accurate.
-# RESULT: Returns any tables where the actual row count does not match the expected.
-##################################################################################################################################################
+#Issue #86
+# ##################################################################################################################################################
+# # TEST: In the VariableCodebook, there is a Count variable that represents the expected row counts for each value. Test that these are accurate.
+# # RESULT: Returns any tables where the actual row count does not match the expected.
+# ##################################################################################################################################################
 # codebook = DBI::dbGetQuery(cn, "SELECT  Variable, TableName, CodeOrValue, ValueDescription, Count FROM [NhanesLandingZone].[Metadata].[VariableCodebook]")
 
-# for (i in 1:nrow(codebook)) {
+# # for (i in 1:nrow(codebook)) {
+# for (i in 1:20) {
 #     valueDescription = codebook[i, "ValueDescription"]
 #     variable = codebook[i, "Variable"]
 #     tableName = codebook[i, "TableName"]
-    
-#     isRange = DBI::dbGetQuery(cn, paste("SELECT COUNT('Range of Values') FROM [NhanesLandingZone].[Metadata].[VariableCodebook] WHERE Variable = '", variable, "' AND TableName = '",tableName,"' AND ValueDescription = 'Range of Values'", sep=""))
-    
-#     if (isRange[1,]==0) {
-#         nonRangeValues = paste("SELECT t.", variable,
-#                                 ", t.rowcounts FROM  (SELECT [", variable , 
-#                                 "] , COUNT([", variable , 
-#                                 "]) AS rowcounts FROM [NhanesLandingZone].[Raw].[", 
-#                                 tableName, "] GROUP BY [", 
-#                                 variable, 
-#                                 "]) t LEFT JOIN (SELECT CodeOrValue ,Count FROM [NhanesLandingZone].[Metadata].[VariableCodebook] WHERE TableName = '", 
-#                                 tableName, 
-#                                 "' AND Variable = '", variable,
-#                                 "' AND CodeOrValue != '.' AND Count > 0) s ON s.CodeOrValue = t.", variable,
-#                                 " WHERE t.rowcounts <> s.Count", sep="")
 
-#         nonRangeValuesQuery = DBI::dbGetQuery(cn, nonRangeValues)
+#     codebookQuery = DBI::dbGetQuery(cn, paste(sep="", "SELECT  CodeOrValue, Count FROM [NhanesLandingZone].[Metadata].[VariableCodebook]
+#         WHERE Variable = '", variable, "'
+#         AND TableName = '", tableName, "'
+#         AND COUNT > 0
+#         ORDER BY Count ASC"))
         
-#         if (length(nonRangeValuesQuery[0])>0) {
-#             print("There's a mismatch dude.")
+#     tableQuery = DBI::dbGetQuery(cn, paste(sep="", "SELECT ", variable, ", COUNT(*) 
+#         AS COUNT FROM [NhanesLandingZone].[Raw].[", tableName, "] 
+#         GROUP BY ",variable,"
+#         ORDER BY COUNT ASC"))
+
+#     for (j in 1:nrow(tableQuery)){
+#         if (tableQuery[j,"COUNT"] != codebookQuery[j,"Count"]){
+#             print(paste("mismatched values for table ", tableName, ", variable ",variable, sep=""))
 #         }
-#         else{print(paste("Row count matches for variable ",variable, sep=""))}
 #     }
-#     else{
-#         rangeValues = paste("SELECT CodeOrValue
-#                                 ,Count
-#                                 ,RTRIM(LTRIM(SUBSTRING(CodeOrValue,0, CHARINDEX(' to ',CodeOrValue)))) as MinValue
-#                                 ,RTRIM(LTRIM(SUBSTRING(CodeOrValue, CHARINDEX(' to ', CodeOrValue) + 4, LEN(CodeOrValue)))) as MaxValue
-#                         FROM [NhanesLandingZone].[Metadata].[VariableCodebook]
-#                         WHERE TableName = '",
-#                         tableName,
-#                         "' AND Variable = '",
-#                         variable,
-#                         "'AND ValueDescription = 'Range of Values' AND CodeOrValue != '.' AND Count > 0", sep="")
-        
-#         rangeValuesQuery = DBI::dbGetQuery(cn, rangeValues)
-        
-#         MinValue = rangeValuesQuery[1, "MinValue"]
-#         MaxValue = rangeValuesQuery[1, "MaxValue"]
-        
-#         rowCountRanges = DBI::dbGetQuery(cn, paste("SELECT COUNT(",variable,") FROM [NhanesLandingZone].[Raw].[", tableName,"] t WHERE ", variable, " BETWEEN ", MinValue," AND ", MaxValue ,sep=""))
-
-#         if (rowCountRanges != rangeValuesQuery[1, "Count"]) {
-#             print("There's a mismatch dude.")
-#         }  
-#         else{print(paste("Row count matches for variable ",variable, sep=""))}          
+#     #compare codebook to table
+#     #sum should be the same?
 # }
+
+
+
+##################################################################################################################################################
+# TEST: Pull the raw and translated version of each table, join on SEQN column, then pair up each column and confirm that the rows are the same
+# RESULT: Returns any tables where the rows differ between Raw and Translated
+##################################################################################################################################################
+translationErrors = dplyr::tibble(
+  TableName=character(), 
+  Variable=character(),
+  Error=character()
+ )
+
+SqlTools::dbSendUpdate(cn, "CREATE TABLE Metadata.TranslationErrors (TableName varchar(1024), Variable varchar(1024), Error varchar(256))")
+
+codebook = DBI::dbGetQuery(cn, "SELECT  DISTINCT(Variable), TableName FROM [NhanesLandingZone].[Metadata].[VariableCodebook] ORDER BY TableName ASC")
+excluded = DBI::dbGetQuery(cn, "SELECT  TableName FROM [NhanesLandingZone].[Metadata].[ExcludedTables]")
+
+checkTranslation <- function(tableName, variable){
+                                    if (!any(excluded == tableName)){
+                                        checkSeqn = DBI::dbGetQuery(cn, paste(sep="", "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+                                                            WHERE TABLE_NAME = '", tableName, "'
+                                                            AND TABLE_SCHEMA = 'Raw' 
+                                                            AND TABLE_CATALOG='NhanesLandingZone'"))
+                                        
+                                        if (any(checkSeqn == 'SEQN')){
+                                            checkEqualQuery = DBI::dbGetQuery(cn, paste(sep="", "SELECT  * FROM 
+                                                                (SELECT A.", variable, " as ", variable, "a, B.", variable, " as ", variable, "b
+                                                                FROM [NhanesLandingZone].[Raw].[", tableName, "] A
+                                                                INNER JOIN [NhanesLandingZone].[Translated].[", tableName, "] B
+                                                                ON A.SEQN = B.SEQN) as tmp
+                                                                WHERE ", variable, "b IS NULL AND ", variable, "a IS NOT NULL;"))
+                                            
+                                            if (nrow(checkEqualQuery)>0) {
+                                                translationErrors <<- dplyr::bind_rows(
+                                                                    translationErrors, 
+                                                                    dplyr::bind_cols(
+                                                                        "TableName" = tableName, 
+                                                                        "Variable" = variable,
+                                                                        "Error" = paste(sep='', "Translated table ", tableName, " has a null value that exists in the raw table for variable: ", variable)
+                                                                    )
+                                                                    )
+                                            }
+                                        }
+                                    }
+                                }
+                                
+logError <- function(tableName, variable){
+    translationErrors <<- dplyr::bind_rows(
+                                            translationErrors, 
+                                            dplyr::bind_cols(
+                                                "TableName" = tableName, 
+                                                "Variable" = variable,
+                                                "Error" = paste(sep='', "Translated table ", tableName, " has a null value that exists in the raw table for variable: ", variable)
+                                            )
+                                            )
+}
+for (i in 1:nrow(codebook)) {
+    variable = codebook[i, "Variable"]
+    tableName = codebook[i, "TableName"]
+    
+    x <- tryCatch({
+    checkTranslation(tableName, variable)
+    },
+    error = function(e) {
+        logError(tableName, variable)
+    }
+    )
+}
+
+
+outputDirectory = "/NHANES/Data"
+
+# generate file name for temporary output
+currOutputFileName = paste(sep = "/", outputDirectory, "TranslationErrors.txt")
+
+# write failed file downloads table to disk
+write.table(
+  translationErrors,
+  file = currOutputFileName,
+  sep = "\t",
+  na = "",
+  append=TRUE,
+  row.names = FALSE,
+  col.names = FALSE,
+  quote = FALSE
+)
+
+# issue BULK INSERT
+insertStatement = paste(sep="",
+                        "BULK INSERT ",
+                        "Metadata.TranslationErrors",
+                        " FROM '",
+                        currOutputFileName,
+                        "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+)
+
+SqlTools::dbSendUpdate(cn, insertStatement)
