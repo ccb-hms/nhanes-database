@@ -64,7 +64,6 @@ if (is.na(grep(pattern, Sys.getenv("EPICONDUCTOR_CONTAINER_VERSION"), value = TR
 }
 
 # Stops build if the date is not in YYYY-MM-DD format
-!is.na(as.Date(Sys.getenv("EPICONDUCTOR_COLLECTION_DATE"), format="%Y-%m-%d"))
 if (is.na(as.Date(Sys.getenv("EPICONDUCTOR_COLLECTION_DATE"), format="%Y-%m-%d"))) {
     stop(paste("Docker Container Environment Variable EPICONDUCTOR_COLLECTION_DATE: ", Sys.getenv("EPICONDUCTOR_COLLECTION_DATE")," not in format YYYY-MM-DD"), sep='')
 }
@@ -106,7 +105,7 @@ mismatchedCols(entailed_edges, "entailed_edges")
 labels = c("Subject", "Object", "IRI", "DiseaseLocation", "Ontology", "Direct", "Inherited")
 mismatchedCols(labels, "labels")
 
-nhanes_variables_mappings = c("Variable", "TableName", "SourceTermID", "SourceTerm", "MappedTermLabel", "MappedTermCURIE", "MappedTermIRI", "MappingScore", "Tags", "Ontology")
+nhanes_variables_mappings = c("Variable", "TableName", "SourceTermID", "SourceTerm", "MappedTermLabel", "MappedTermCURIE", "MappedTermIRI", "MappingScore", "Ontology")
 mismatchedCols(nhanes_variables_mappings, "nhanes_variables_mappings")
 
 ##################################################################################################################
@@ -146,7 +145,7 @@ if (nrow(DBI::dbGetQuery(cn, rawToQuestionnaire))>0) {
 
 ##################################################################################################################
 # TEST: Raw and Translated tables have the same row counts
-# RESULT: 
+# RESULT: if any tables have mismatched row counts, stop the build
 ##################################################################################################################
 
 for (i in 1:nrow(allTableNames)) {
@@ -297,6 +296,7 @@ logError <- function(tableName, variable){
                                             )
                                             )
 }
+
 for (i in 1:nrow(codebook)) {
     variable = codebook[i, "Variable"]
     tableName = codebook[i, "TableName"]
@@ -338,3 +338,17 @@ insertStatement = paste(sep="",
 )
 
 SqlTools::dbSendUpdate(cn, insertStatement)
+
+# shrink transaction log
+SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+
+# issue checkpoint
+SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+
+
+#Check phonto and nhanesA installs
+if (packageVersion("phonto")!="0.0.9"){stop(paste("Phonto installation failure or version 0.0.9 not matched."), sep='')}
+if (packageVersion("nhanesA")!="1.0"){stop(paste("nhanesA installation failure or version 1.0 not matched."), sep='')}
+
+# shutdown the database engine cleanly
+SqlTools::dbSendUpdate(cn, "SHUTDOWN")
