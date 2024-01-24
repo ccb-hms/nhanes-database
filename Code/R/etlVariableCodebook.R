@@ -296,8 +296,7 @@ ontology_mappings <- list.files(ontologyMappings)
 
 for (currTable in ontology_mappings) {
     
-    # TODO: we really only want to load this single table?  then why loop?
-    if (currTable == "nhanes_variables_mappings.tsv") {
+    if (currTable != "README.md" & currTable != "non-mappings") {
         path = ontologyMappings
         loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
         
@@ -306,11 +305,14 @@ for (currTable in ontology_mappings) {
         # generate SQL table definitions from column types in tibbles
         createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("Ontology", str_extract(currTable, '.*(?=\\.tsv)'), sep="."), loaded_data) # nolint
 
-        # change TEXT to VARCHAR(256)
+        # change TEXT to VARCHAR(512)
         createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
 
-        # change DOUBLE to VARCHAR(256)
+        # change DOUBLE to VARCHAR(512)
         createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" VARCHAR(512)", fixed = TRUE)
+        
+        # change SMALLINT to VARCHAR(512)
+        createTableQuery = gsub(createTableQuery, pattern = "SMALLINT", replace = "VARCHAR(512)", fixed = TRUE)
         
         # remove double quotes, which interferes with the schema specification
         createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
@@ -319,13 +321,25 @@ for (currTable in ontology_mappings) {
         SqlTools::dbSendUpdate(cn, createTableQuery)
 
         # run bulk insert
-        insertStatement = paste(sep="",
+        if (currTable == "nhanes_oral_health_mappings.tsv") {
+            insertStatement = paste(sep="",
+                                "BULK INSERT Ontology.",
+                                str_extract(currTable, '.*(?=\\.tsv)'),
+                                " FROM '",
+                                paste0(path, currTable),
+                                "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\r\n')"
+        )
+        }
+        else{
+            insertStatement = paste(sep="",
                                 "BULK INSERT Ontology.",
                                 str_extract(currTable, '.*(?=\\.tsv)'),
                                 " FROM '",
                                 paste0(path, currTable),
                                 "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
-        )
+        ) 
+        }
+        
         SqlTools::dbSendUpdate(cn, insertStatement)
 
     # keep memory as clean as possible

@@ -152,18 +152,18 @@ RUN mkdir -p -m 770 /var/opt/mssql && chgrp -R 0 /var/opt/mssql
 # Install and configure database connectivity components
 #------------------------------------------------------------------------------
 	
-# install FreeTDS driver
-WORKDIR /tmp
-RUN wget ftp://ftp.freetds.org/pub/freetds/stable/freetds-1.1.40.tar.gz
-RUN tar zxvf freetds-1.1.40.tar.gz
-RUN cd freetds-1.1.40 && ./configure --enable-krb5 && make && make install
-RUN rm -r /tmp/freetds*
+# # install FreeTDS driver
+# WORKDIR /tmp
+# RUN wget ftp://ftp.freetds.org/pub/freetds/stable/freetds-1.1.40.tar.gz
+# RUN tar zxvf freetds-1.1.40.tar.gz
+# RUN cd freetds-1.1.40 && ./configure --enable-krb5 && make && make install
+# RUN rm -r /tmp/freetds*
 
-# tell unixodbc where to find the FreeTDS driver shared object
-RUN echo '\n\
-[FreeTDS]\n\
-Driver = /usr/local/lib/libtdsodbc.so \n\
-' >> /etc/odbcinst.ini
+# # tell unixodbc where to find the FreeTDS driver shared object
+# RUN echo '\n\
+# [FreeTDS]\n\
+# Driver = /usr/local/lib/libtdsodbc.so \n\
+# ' >> /etc/odbcinst.ini
 
 # install pyodbc
 RUN pip3 install pyodbc
@@ -240,7 +240,7 @@ RUN Rscript -e "remotes::install_cran('optparse')"
 
 #install nhanesA and phonto from github in order to have the latest version (CRAN will take a while to update)
 RUN Rscript -e "devtools::install_github('ccb-hms/phonto')"
-RUN Rscript -e "devtools::install_github('cjendres1/nhanes')"
+RUN Rscript -e "devtools::install_github('cjendres1/nhanes@97f1850')"
 
 #------------------------------------------------------------------------------
 # Download and DB Build Process
@@ -299,7 +299,7 @@ RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /tmp/NHANES-metadata
 
 RUN git fetch --tags
-RUN git checkout tags/v3.8.2
+RUN git checkout tags/v3.9.1
 
 # install packages, which require newer version of rvest in conflict with the download / build script
 RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
@@ -353,9 +353,14 @@ RUN chmod -R 777 /usr/local/lib/R/library
 RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
 
 # Declare which version of the container this is, and make it available inside the container 
+<<<<<<< HEAD
+ENV EPICONDUCTOR_CONTAINER_VERSION v0.4.0
+ENV EPICONDUCTOR_COLLECTION_DATE 2024-01-24
+=======
 
 ENV EPICONDUCTOR_CONTAINER_VERSION v0.3.0
 ENV EPICONDUCTOR_COLLECTION_DATE 2023-12-19
+>>>>>>> origin/feature/rocker-base
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron.site
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron.site
