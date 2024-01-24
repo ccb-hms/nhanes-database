@@ -33,9 +33,6 @@ then
 	echo "SA_PASSWORD=\"$SA_PASSWORD\"" >> /usr/local/lib/R/etc/Renviron.site
 fi
 
-# # start RStudio Server
-# /usr/sbin/rstudio-server restart
-
 # start sshd
 /usr/sbin/sshd -D &
 
