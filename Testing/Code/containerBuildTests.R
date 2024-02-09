@@ -105,7 +105,7 @@ mismatchedCols(entailed_edges, "entailed_edges")
 labels = c("Subject", "Object", "IRI", "DiseaseLocation", "Ontology", "Direct", "Inherited")
 mismatchedCols(labels, "labels")
 
-nhanes_variables_mappings = c("Variable", "TableName", "SourceTermID", "SourceTerm", "MappedTermLabel", "MappedTermCURIE", "MappedTermIRI", "MappingScore", "Ontology")
+nhanes_variables_mappings = c("Variable", "TableName", "SourceTermID", "SourceTerm", "MappedTermLabel", "MappedTermCURIE", "MappedTermIRI", "MappingScore", "Tags", "Ontology")
 mismatchedCols(nhanes_variables_mappings, "nhanes_variables_mappings")
 
 ##################################################################################################################
@@ -265,14 +265,11 @@ checkTranslation <- function(tableName, variable){
                                                             AND TABLE_CATALOG='NhanesLandingZone'"))
                                         
                                         if (any(checkSeqn == 'SEQN')){
-                                            checkEqualQuery = DBI::dbGetQuery(cn, paste(sep="", "SELECT  * FROM 
-                                                                (SELECT A.", variable, " as ", variable, "a, B.", variable, " as ", variable, "b
-                                                                FROM [NhanesLandingZone].[Raw].[", tableName, "] A
-                                                                INNER JOIN [NhanesLandingZone].[Translated].[", tableName, "] B
-                                                                ON A.SEQN = B.SEQN) as tmp
-                                                                WHERE ", variable, "b IS NULL AND ", variable, "a IS NOT NULL;"))
+                                            checkEqualRaw = DBI::dbGetQuery(cn, paste(sep="", "SELECT COUNT(*) - COUNT(",variable,") FROM [NhanesLandingZone].[Raw].[", tableName, "]"))
+
+                                            checkEqualTranslated = DBI::dbGetQuery(cn, paste(sep="", "SELECT COUNT(*) - COUNT(",variable,") FROM [NhanesLandingZone].[Translated].[", tableName, "]"))
                                             
-                                            if (nrow(checkEqualQuery)>0) {
+                                            if (checkEqualRaw[,1] != checkEqualTranslated[,1]) {
                                                 translationErrors <<- dplyr::bind_rows(
                                                                     translationErrors, 
                                                                     dplyr::bind_cols(
@@ -345,9 +342,8 @@ SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-
 #Check phonto and nhanesA installs
-if (packageVersion("phonto")!="0.0.9"){stop(paste("Phonto installation failure or version 0.0.9 not matched."), sep='')}
+if (packageVersion("phonto")!="0.1.0"){stop(paste("Phonto installation failure or version 0.1.0 not matched."), sep='')}
 if (packageVersion("nhanesA")!="1.0"){stop(paste("nhanesA installation failure or version 1.0 not matched."), sep='')}
 
 # shutdown the database engine cleanly
