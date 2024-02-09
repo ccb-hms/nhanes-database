@@ -91,7 +91,7 @@ SqlTools::dbSendUpdate(cn, "
         BeginYear int,
         EndYear int,
         DataGroup varchar(64),
-        UseConstraints varchar(128),
+        UseConstraints varchar(1024),
         DocFile varchar(1024),
         DataFile varchar(1024),
         DatePublished varchar(1024)
@@ -161,10 +161,10 @@ SqlTools::dbSendUpdate(cn, "
         [Table] varchar(64),
         SASLabel varchar(64),
         EnglishText varchar(1024),
+        UseConstraints varchar(max),
         Target varchar(max),
-        UseConstraints varchar(128),
-        ProcessedText varchar(1024),
         Tags varchar(1024),
+        ProcessedText varchar(1024),
         VariableID varchar(1024),
         IsPhenotype varchar(1024),
         OntologyMapped varchar(1024)
@@ -175,7 +175,7 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT ##tmp_nhanes_variables FROM '", variablesFile, "'
-    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
@@ -199,7 +199,7 @@ SqlTools::dbSendUpdate(cn, "
         Description varchar(1024) NULL, 
         Target varchar(max) NULL,
         SasLabel varchar(64),
-        UseConstraints varchar(128),
+        UseConstraints varchar(max),
         ProcessedText varchar(1024),
         Tags varchar(1024),
         VariableID varchar(1024),
@@ -209,6 +209,9 @@ SqlTools::dbSendUpdate(cn, "
 
 # update the new columns in the NhanesLandingZone.dbo.QuestionnaireVariables
 # with values from the imported table
+
+#TODO: in v0.4.0, for some reason lines 222-223 don't import correctly. When switched they load correctly. 
+#May need to update this in future releases.
 SqlTools::dbSendUpdate(cn, "
     UPDATE Q
     SET 
@@ -217,8 +220,8 @@ SqlTools::dbSendUpdate(cn, "
         Q.SasLabel = V.SasLabel,
         Q.UseConstraints = V.UseConstraints,
         Q.ProcessedText = V.ProcessedText,
-        Q.Tags = V.Tags,
-        Q.VariableID = V.VariableID,
+        Q.Tags = V.VariableID,
+        Q.VariableID = V.Tags,
         Q.IsPhenotype = V.IsPhenotype,
         Q.OntologyMapped = V.OntologyMapped   
     FROM 

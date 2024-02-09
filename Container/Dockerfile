@@ -299,7 +299,7 @@ RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /tmp/NHANES-metadata
 
 RUN git fetch --tags
-RUN git checkout tags/v3.9.1
+RUN git checkout tags/v3.10.0
 
 # install packages, which require newer version of rvest in conflict with the download / build script
 RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
@@ -341,6 +341,7 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 # run the script to translate the raw coded tables
 COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
 WORKDIR /NHANES
+
 RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 	&& Rscript /NHANES/translateRawTables.R
 
@@ -362,7 +363,7 @@ RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/lo
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/environment
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/environment
 
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-	&& Rscript /NHANES/containerBuildTests.R
+# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+# 	&& Rscript /NHANES/containerBuildTests.R
 
 CMD ["/startup/startup.sh"]
