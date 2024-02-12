@@ -41,11 +41,8 @@ jobs:
         sudo swapoff -a
         sudo rm -f /swapfile
         sudo apt clean
-        docker system prune
+        yes | docker system prune
         df -h
-
-    - name: cleanup old action artifacts
-      run: .github/workflows/purge_artifacts.sh ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build, Tag, and Push to Docker Hub
       uses: docker/build-push-action@v4
