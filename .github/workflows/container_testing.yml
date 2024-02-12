@@ -42,7 +42,9 @@ jobs:
         sudo swapoff -a
         sudo rm -f /swapfile
         sudo apt clean
+        yes | docker system prune
         echo 'y' | docker system prune
+        echo 'y'
         df -h
         sudo rm -rf /usr/share/dotnet
         df . -h
