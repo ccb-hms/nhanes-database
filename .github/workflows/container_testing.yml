@@ -4,7 +4,7 @@ name: Tag, Build, and Push Docker Image with Github Workflow
 on:
   push:
     branches:
-      - main
+      - feature/rocker-base
     paths-ignore:
       - '**/README.md'
 
@@ -42,7 +42,7 @@ jobs:
         sudo swapoff -a
         sudo rm -f /swapfile
         sudo apt clean
-        echo 'yes' | docker system prune
+        echo 'y' | docker system prune
         df -h
         sudo rm -rf /usr/share/dotnet
         df . -h
