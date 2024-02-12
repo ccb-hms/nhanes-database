@@ -43,6 +43,10 @@ jobs:
         sudo apt clean
         yes | docker system prune
         df -h
+        sudo rm -rf /usr/share/dotnet
+        df . -h
+        sudo rm -rf ${GITHUB_WORKSPACE}/.git
+        df . -h
 
     - name: Build, Tag, and Push to Docker Hub
       uses: docker/build-push-action@v4
