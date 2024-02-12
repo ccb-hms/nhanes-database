@@ -3,7 +3,8 @@ name: Tag, Build, and Push Docker Image with Github Workflow
 #Set up tagging/building only on tag releases
 on:
   push:
-    tags: [ v* ]
+    branches:
+      - main
     paths-ignore:
       - '**/README.md'
 
