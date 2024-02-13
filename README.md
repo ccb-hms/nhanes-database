@@ -36,7 +36,7 @@ docker \
         -e 'CONTAINER_USER_PASSWORD=PASSWORD' \
         -e 'ACCEPT_EULA=Y' \
         -e 'SA_PASSWORD=yourStrong(!)Password' \
-        hmsccb/nhanes-workbench:version-0.4.0
+        hmsccb/nhanes-workbench:version-0.4.1
 ```
 
 If you're using windows you may need to give the command as a single line:
