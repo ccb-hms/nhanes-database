@@ -355,7 +355,7 @@ RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
 
 # Declare which version of the container this is, and make it available inside the container 
 ENV EPICONDUCTOR_CONTAINER_VERSION v0.4.1
-ENV EPICONDUCTOR_COLLECTION_DATE 2024-02-09
+ENV EPICONDUCTOR_COLLECTION_DATE 2024-02-12
 
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron.site
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron.site
@@ -363,7 +363,7 @@ RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/lo
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/environment
 RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/environment
 
-# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-# 	&& Rscript /NHANES/containerBuildTests.R
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+	&& Rscript /NHANES/containerBuildTests.R
 
 CMD ["/startup/startup.sh"]

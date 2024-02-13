@@ -343,7 +343,7 @@ SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
 #Check phonto and nhanesA installs
-if (packageVersion("phonto")!="0.1.0"){stop(paste("Phonto installation failure or version 0.1.0 not matched."), sep='')}
+if (packageVersion("phonto")!="0.1.1"){stop(paste("Phonto installation failure or version 0.1.1 not matched."), sep='')}
 if (packageVersion("nhanesA")!="1.0"){stop(paste("nhanesA installation failure or version 1.0 not matched."), sep='')}
 
 # shutdown the database engine cleanly
