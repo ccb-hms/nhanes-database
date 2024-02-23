@@ -41,9 +41,6 @@ AS
     -- now reorganize the index
     EXECUTE('ALTER INDEX ' + @IndexName + ' ON [' + @SourceTableSchema + '].[' + @SourceTableName + '] REORGANIZE')
     
-    -- TODO: fix hard-coded index name, see above comments
-    -- EXEC('ALTER INDEX ccix ON [' + @SourceTableSchema + '].[' + @SourceTableName + '] REORGANIZE')
-
     -- check that the variable codebook actually has data for this table
     DECLARE @variableTranslationCount INT
     SELECT @variableTranslationCount = COUNT(*) FROM Metadata.VariableCodebook C WHERE C.TableName = @SourceTableName
