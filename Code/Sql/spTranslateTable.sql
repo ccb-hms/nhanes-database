@@ -124,7 +124,7 @@ AS
 
     -- check whether there are any categorical columns left
     DECLARE @categoricalVariableCount INT
-    SELECT @categoricalVariableCount = COUNT(*) FROM #tmpColNames WHERE COLUMN_NAME != @pkColName
+    SELECT @categoricalVariableCount = COUNT(*) FROM #tmpColNames WHERE COLUMN_NAME != @pkColName AND COLUMN_NAME != 'RowId'
 
     -- debugging
     -- PRINT 'number categorical cols left:'
