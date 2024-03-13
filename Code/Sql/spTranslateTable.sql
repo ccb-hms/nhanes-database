@@ -9,6 +9,37 @@ CREATE PROC spTranslateTable
     @DestinationTableName varchar(MAX)
 AS
 
+    -- add a RowId column to the source table (SEQN is not a primary key on all tables)
+    EXEC('ALTER TABLE [' + @SourceTableSchema + '].[' + @SourceTableName + '] ADD RowId INT IDENTITY NOT NULL')
+    
+    -- reorganize the clustered columnstore index to prevent fragmentation
+
+    -- get globally unique names for global temp table
+    DECLARE @CcixTempTableName varchar(4000)
+    SET @CcixTempTableName = '##' + REPLACE(CAST(NEWID() AS varchar(256)), '-', '_')
+
+    -- put the name of the clustered columnstore index in a global temp table
+    DECLARE @ReorganizeIndexStatement nvarchar(4000)
+    SET @ReorganizeIndexStatement = '
+        CREATE TABLE ' + @CcixTempTableName + ' (C1 varchar(8000), C2 varchar(8000), C3 varchar(8000))
+        INSERT INTO ' + @CcixTempTableName + '
+            EXEC sys.sp_helpindex @objname = ''[' + @SourceTableSchema + '].[' + @SourceTableName + ']'''
+
+    EXEC(@ReorganizeIndexStatement)
+
+    DECLARE @IndexName varchar(4000)
+    DECLARE @ParamDefinition nvarchar(4000)
+
+    -- retrieve the index name from the global temp table
+    SET @ReorganizeIndexStatement = 'SELECT @IndexNameOut = C1 FROM ' + @CcixTempTableName + ' WHERE C2 LIKE ''clustered, columnstore%'''
+    SET @ParamDefinition = '@IndexNameOut varchar(4000) OUTPUT'
+    EXECUTE sp_executesql @ReorganizeIndexStatement, @ParamDefinition, @IndexNameOut = @IndexName OUTPUT
+
+    -- clean up the global temp table
+    EXECUTE('DROP TABLE IF EXISTS ' + @CcixTempTableName)
+
+    -- now reorganize the index
+    EXECUTE('ALTER INDEX ' + @IndexName + ' ON [' + @SourceTableSchema + '].[' + @SourceTableName + '] REORGANIZE')
     
     -- check that the variable codebook actually has data for this table
     DECLARE @variableTranslationCount INT
@@ -93,7 +124,7 @@ AS
 
     -- check whether there are any categorical columns left
     DECLARE @categoricalVariableCount INT
-    SELECT @categoricalVariableCount = COUNT(*) FROM #tmpColNames WHERE COLUMN_NAME != @pkColName
+    SELECT @categoricalVariableCount = COUNT(*) FROM #tmpColNames WHERE COLUMN_NAME != @pkColName AND COLUMN_NAME != 'RowId'
 
     -- debugging
     -- PRINT 'number categorical cols left:'
@@ -126,7 +157,7 @@ AS
     SELECT 
         @SourceSelectColNames = STRING_AGG(CAST('CAST([' + COLUMN_NAME + '] AS varchar(MAX)) AS [' + COLUMN_NAME + ']' AS varchar(MAX)), ', ')
     FROM #tmpColNames
-    WHERE COLUMN_NAME != @pkColName
+    WHERE COLUMN_NAME != @pkColName AND COLUMN_NAME != 'RowId'
 
     SET @SourceSelectColNames = CAST('[' AS varchar(MAX)) + @pkColName + CAST('], ' AS varchar(MAX)) + @SourceSelectColNames
 
@@ -139,7 +170,7 @@ AS
     SELECT @UnpivotColNames=STRING_AGG(CAST('[' + COLUMN_NAME + ']' AS varchar(MAX)), ', ') WITHIN GROUP (ORDER BY ORDINAL_POSITION)
     FROM #tmpColNames
     WHERE 
-        COLUMN_NAME != @pkColName
+        COLUMN_NAME != @pkColName AND COLUMN_NAME != 'RowId'
 
     -- debugging
     -- PRINT 'unpivot col names:'
@@ -148,12 +179,12 @@ AS
     -- assemble dynamic SQL to unpivot the original table
     DECLARE @unpivotStmt varchar(MAX)
     SET @unpivotStmt = '
-        SELECT ' + @pkColName + ', Variable, Response 
+        SELECT RowId, ' + @pkColName + ', Variable, Response 
         INTO ' + @UnpivotTempTableName + '
         FROM (
-            SELECT 
+            SELECT RowId, 
                 ' + @SourceSelectColNames + '
-            FROM ' + @SourceTableSchema + '.' + @SourceTableName + '
+            FROM [' + @SourceTableSchema + '].[' + @SourceTableName + ']
         ) SourceTable
         UNPIVOT (
             Response FOR Variable IN (
@@ -172,6 +203,7 @@ AS
     DECLARE @TranslateStmt varchar(MAX)
     SET @TranslateStmt = '
         SELECT 
+            T.RowId,
             T.' + @pkColName + ',
             T.Variable,
             COALESCE(CAST(V.ValueDescription AS VARCHAR(256)), CAST(T.Response AS VARCHAR(256))) AS ValueDescription
@@ -201,6 +233,7 @@ AS
                     SELECT * 
                     FROM (
                         SELECT 
+                            RowId, 
                             ' + @pkColName + ', 
                             Variable, 
                             ValueDescription 
@@ -214,9 +247,12 @@ AS
                     ) AS PivotTable
                 )
                 -- full outer join to accommodate scenarios where the categorical variables were all NULL
-                SELECT COALESCE(P.' + @pkColName + ', S.' + @pkColName + ') AS ' + @pkColName + REPLACE(', ' + @UnpivotColNames, ', [', ', P.[') +
-                REPLACE(', ' + @NumericSelectColNames, ', [', ', S.[') + ' INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' 
-                FROM PivotTable P FULL OUTER JOIN ' + @SourceTableSchema + '.' + @SourceTableName + ' S ON S.[' + @pkColName + '] = P.[' + @pkColName + ']
+                SELECT 
+                    COALESCE(P.RowId, S.RowId) AS RowId, 
+                    COALESCE(P.' + @pkColName + ', S.' + @pkColName + ') AS ' + @pkColName + REPLACE(', ' + @UnpivotColNames, ', [', ', P.[') +
+                    REPLACE(', ' + @NumericSelectColNames, ', [', ', S.[') + ' 
+                INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' 
+                FROM PivotTable P FULL OUTER JOIN [' + @SourceTableSchema + '].[' + @SourceTableName + '] S ON S.[RowId] = P.[RowId]
             '
         END
     ELSE
@@ -228,6 +264,7 @@ AS
                     SELECT * 
                     FROM (
                         SELECT 
+                            RowId, 
                             ' + @pkColName + ', 
                             Variable, 
                             ValueDescription 
@@ -250,11 +287,12 @@ AS
     -- PRINT @PivotStmt
     EXEC(@PivotStmt) 
 
+
     -- insert rows where all of the variable responses were NULL in the original data
     DECLARE @InsertNullStmt varchar(8000)
     SET @InsertNullStmt = '
-        INSERT INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' (' + @pkColName + ')
-        SELECT A.' + @pkColName + ' FROM ' + @SourceTableSchema + '.' + @SourceTableName + ' A LEFT OUTER JOIN ' + @DestinationTableSchema + '.' + @DestinationTableName + ' T ON A.' + @pkColName + ' = T.' + @pkColName + ' WHERE T.' + @pkColName + ' IS NULL
+        INSERT INTO ' + @DestinationTableSchema + '.' + @DestinationTableName + ' (' + @pkColName + ', RowId)
+        SELECT A.' + @pkColName + ', A.RowId FROM ' + @SourceTableSchema + '.' + @SourceTableName + ' A LEFT OUTER JOIN ' + @DestinationTableSchema + '.' + @DestinationTableName + ' T ON A.' + @pkColName + ' = T.' + @pkColName + ' WHERE T.' + @pkColName + ' IS NULL
     '
 
     -- PRINT @InsertNullStmt
