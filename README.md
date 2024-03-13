@@ -36,9 +36,14 @@ docker \
         -e 'CONTAINER_USER_PASSWORD=PASSWORD' \
         -e 'ACCEPT_EULA=Y' \
         -e 'SA_PASSWORD=yourStrong(!)Password' \
-        hmsccb/nhanes-workbench:version-0.2.0
+        hmsccb/nhanes-workbench:version-0.4.1
 ```
 
+If you're using windows you may need to give the command as a single line:
+
+```
+docker run --rm --platform=linux/amd64 --name nhanes-workbench  -d -v LOCAL_DIRECTORY:/HostData -p 8787:8787 -p 2200:22 -p 1433:1433 -e 'CONTAINER_USER_USERNAME=USER' -e 'CONTAINER_USER_PASSWORD=PASSWORD' -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=yourStrong(!)Password' hmsccb/nhanes-workbench:version-0.4.1
+```
 For other versions, see the [Dockerhub repository](https://hub.docker.com/r/hmsccb/nhanes-workbench/tags) and use the desired tag.
 
 ### Parameters

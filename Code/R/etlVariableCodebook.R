@@ -14,8 +14,6 @@ tablesFile = paste(sep = "/", getwd(), "metadata/nhanes_tables.tsv")
 variablesFile = paste(sep = "/", getwd(), "metadata/nhanes_variables.tsv")
 ontologyMappings = paste(sep = "/", getwd(), "ontology-mappings/")
 ontologyTables = paste(sep = "/", getwd(), "ontology-tables/")
-excludedTables = "/NHANES/excluded_tables.tsv"
-
 
 # parameters to connect to SQL
 sqlHost = "localhost"
@@ -70,28 +68,10 @@ SqlTools::dbSendUpdate(cn, "
     )
 ")
 
-# run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT NhanesLandingZone.Metadata.VariableCodebook FROM '", codebookFile, "'
-    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t', ROWTERMINATOR = '\n')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
-
-SqlTools::dbSendUpdate(cn, insertStatement)
-
-#TODO: make this table more comprehensive, to invlude suffixes as well as prefixes
-# create the ExcludedTables table in SQL
-SqlTools::dbSendUpdate(cn, "
-    CREATE TABLE NhanesLandingZone.Metadata.ExcludedTables (
-        TableName varchar(64),
-        Reason varchar(64)
-    )
-")
-
-# run bulk insert
-insertStatement = paste(sep="", "
-    BULK INSERT NhanesLandingZone.Metadata.ExcludedTables FROM '", excludedTables, "'
-    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\r\n')")
-
 
 SqlTools::dbSendUpdate(cn, insertStatement)
 
@@ -111,7 +91,7 @@ SqlTools::dbSendUpdate(cn, "
         BeginYear int,
         EndYear int,
         DataGroup varchar(64),
-        UseConstraints varchar(64),
+        UseConstraints varchar(1024),
         DocFile varchar(1024),
         DataFile varchar(1024),
         DatePublished varchar(1024)
@@ -121,7 +101,7 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT ##tmp_nhanes_tables FROM '", tablesFile, "'
-    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
@@ -172,7 +152,6 @@ SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
 # issue checkpoint
 SqlTools::dbSendUpdate(cn, "CHECKPOINT")
 
-
 # load the variable descriptions
 
 # create the nhanes_tables table in SQL
@@ -182,11 +161,12 @@ SqlTools::dbSendUpdate(cn, "
         [Table] varchar(64),
         SASLabel varchar(64),
         EnglishText varchar(1024),
-        Target varchar(128),
-        UseConstraints varchar(128),
-        ProcessedText varchar(1024),
+        UseConstraints varchar(max),
+        Target varchar(max),
         Tags varchar(1024),
+        ProcessedText varchar(1024),
         VariableID varchar(1024),
+        IsPhenotype varchar(1024),
         OntologyMapped varchar(1024)
     )
 ")
@@ -195,27 +175,43 @@ SqlTools::dbSendUpdate(cn, "
 # run bulk insert
 insertStatement = paste(sep="", "
     BULK INSERT ##tmp_nhanes_variables FROM '", variablesFile, "'
-    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
+    WITH (FORMAT='CSV', KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR='\t')
 ")
 
 SqlTools::dbSendUpdate(cn, insertStatement)
+
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [Variable] = REPLACE([Variable], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [Table] = REPLACE([Table], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [SasLabel] = REPLACE([SasLabel], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [EnglishText] = REPLACE([EnglishText], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [Target] = REPLACE([Target], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [UseConstraints] = REPLACE([UseConstraints], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [ProcessedText] = REPLACE([ProcessedText], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [Tags] = REPLACE([Tags], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [VariableID] = REPLACE([VariableID], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [IsPhenotype] = REPLACE([IsPhenotype], CHAR(34), '')")
+SqlTools::dbSendUpdate(cn, "UPDATE ##tmp_nhanes_variables SET [OntologyMapped] = REPLACE([OntologyMapped], CHAR(34), '')")
 
 # add columns to QuestionnaireVariables table to accommodate additional data
 SqlTools::dbSendUpdate(cn, "
     ALTER TABLE NhanesLandingZone.Metadata.QuestionnaireVariables 
     ADD 
         Description varchar(1024) NULL, 
-        Target varchar(128) NULL,
+        Target varchar(max) NULL,
         SasLabel varchar(64),
-        UseConstraints varchar(64),
+        UseConstraints varchar(max),
         ProcessedText varchar(1024),
         Tags varchar(1024),
         VariableID varchar(1024),
+        IsPhenotype varchar(1024),
         OntologyMapped varchar(1024)
 ")
 
 # update the new columns in the NhanesLandingZone.dbo.QuestionnaireVariables
 # with values from the imported table
+
+#TODO: in v0.4.0, for some reason lines 222-223 don't import correctly. When switched they load correctly. 
+#May need to update this in future releases.
 SqlTools::dbSendUpdate(cn, "
     UPDATE Q
     SET 
@@ -224,9 +220,10 @@ SqlTools::dbSendUpdate(cn, "
         Q.SasLabel = V.SasLabel,
         Q.UseConstraints = V.UseConstraints,
         Q.ProcessedText = V.ProcessedText,
-        Q.Tags = V.Tags,
-        Q.VariableID = V.VariableID,
-        Q.OntologyMapped = V.OntologyMapped    
+        Q.Tags = V.VariableID,
+        Q.VariableID = V.Tags,
+        Q.IsPhenotype = V.IsPhenotype,
+        Q.OntologyMapped = V.OntologyMapped   
     FROM 
         NhanesLandingZone.Metadata.QuestionnaireVariables Q
         INNER JOIN ##tmp_nhanes_variables V ON
@@ -302,8 +299,7 @@ ontology_mappings <- list.files(ontologyMappings)
 
 for (currTable in ontology_mappings) {
     
-    # TODO: we really only want to load this single table?  then why loop?
-    if (currTable == "nhanes_variables_mappings.tsv") {
+    if (currTable != "README.md" & currTable != "non-mappings") {
         path = ontologyMappings
         loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
         
@@ -312,11 +308,14 @@ for (currTable in ontology_mappings) {
         # generate SQL table definitions from column types in tibbles
         createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("Ontology", str_extract(currTable, '.*(?=\\.tsv)'), sep="."), loaded_data) # nolint
 
-        # change TEXT to VARCHAR(256)
+        # change TEXT to VARCHAR(512)
         createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
 
-        # change DOUBLE to VARCHAR(256)
+        # change DOUBLE to VARCHAR(512)
         createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" VARCHAR(512)", fixed = TRUE)
+        
+        # change SMALLINT to VARCHAR(512)
+        createTableQuery = gsub(createTableQuery, pattern = "SMALLINT", replace = "VARCHAR(512)", fixed = TRUE)
         
         # remove double quotes, which interferes with the schema specification
         createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
@@ -325,13 +324,25 @@ for (currTable in ontology_mappings) {
         SqlTools::dbSendUpdate(cn, createTableQuery)
 
         # run bulk insert
-        insertStatement = paste(sep="",
+        if (currTable == "nhanes_oral_health_mappings.tsv") {
+            insertStatement = paste(sep="",
+                                "BULK INSERT Ontology.",
+                                str_extract(currTable, '.*(?=\\.tsv)'),
+                                " FROM '",
+                                paste0(path, currTable),
+                                "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\r\n')"
+        )
+        }
+        else{
+            insertStatement = paste(sep="",
                                 "BULK INSERT Ontology.",
                                 str_extract(currTable, '.*(?=\\.tsv)'),
                                 " FROM '",
                                 paste0(path, currTable),
                                 "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
-        )
+        ) 
+        }
+        
         SqlTools::dbSendUpdate(cn, insertStatement)
 
     # keep memory as clean as possible
