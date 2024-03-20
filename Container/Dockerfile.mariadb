@@ -1,7 +1,7 @@
 # experiment with getting a functional interactive environment with R installed in 
 # a standard mariadb columnstore container
 
-# docker build --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
+# docker build --no-cache --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
 
 # docker \
 #     run \
@@ -22,7 +22,32 @@
 # this just extends the MariaDB container, so the default credntials should work: admin:C0lumnStore!
 # to log in to the database
 
-# mysql -h 127.0.0.1 -P 3306 -u admin -p
+# mariadb -h 127.0.0.1 -P 3306 -u admin -p'C0lumnStore!'
+
+# CREATE DATABASE analytics;
+
+# this throws an error if `provision` has not already been run
+# CREATE TABLE analytics.appointments(
+#     id BIGINT UNSIGNED NOT NULL,
+#     name VARCHAR(200) NOT NULL,
+#     phone_number VARCHAR(15) NOT NULL,
+#     email VARCHAR(254) NOT NULL,
+#     time DATETIME NOT NULL,
+#     reason VARCHAR(15) NOT NULL,
+#     status VARCHAR(10) NOT NULL,
+#     doctor_id BIGINT UNSIGNED NOT NULL
+# ) ENGINE=ColumnStore;
+
+
+# CREATE TABLE analytics.T1(
+#     id BIGINT UNSIGNED NOT NULL
+# ) ENGINE=ColumnStore;
+
+# INSERT INTO analytics.T1 VALUES (123);
+# INSERT INTO analytics.T1 VALUES (456);
+# INSERT INTO analytics.T1 VALUES (780);
+
+# SELECT * FROM analytics.T1;
 
 FROM mariadb/columnstore
 
