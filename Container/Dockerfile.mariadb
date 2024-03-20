@@ -51,7 +51,15 @@
 
 # SELECT * FROM analytics.T1;
 
+# and from R (after running the above):
+# cn = RMariaDB::dbConnect(RMariaDB::MariaDB(), dbname="analytics", username="admin", password="C0lumnStore!", host="localhost")
+# DBI::dbGetQuery(cn, "SELECT * FROM analytics.T1")
+
 FROM mariadb/columnstore
+
+#------------------------------------------------------------------------------
+# Configure the system
+#------------------------------------------------------------------------------
 
 # install sshd
 RUN dnf -y install openssh-server openssh-clients; \
@@ -60,7 +68,6 @@ RUN dnf -y install openssh-server openssh-clients; \
     ssh-keygen -q -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key -N '' && \
     ssh-keygen -t dsa -f /etc/ssh/ssh_host_ed25519_key  -N ''; \
     dnf clean all;
-
 EXPOSE 22
 
 # copy startup script
@@ -68,17 +75,59 @@ RUN mkdir /startup
 COPY Container/startup.sh /startup/startup.sh
 RUN chmod 700 /startup/startup.sh
 
+# install system libraries
+
+RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+    dnf config-manager --set-enabled powertools
+
 # install unixODBC
 RUN dnf makecache && \
     dnf -y install \ 
-    unixODBC-devel  \
-    mariadb-connector-odbc
+        unixODBC-devel  \
+        mariadb-connector-odbc
+
+# additional libraries to support the R environment
+RUN dnf makecache && \
+    dnf -y install \ 
+        openssl-devel  \
+        libxml2-devel  \
+        libcurl-devel  \
+        harfbuzz-devel \
+        fribidi-devel \
+        freetype-devel \
+        libpng-devel \
+        libtiff-devel \
+        libjpeg-devel \
+        libgit2-devel \
+        mysql-devel
+
+
+#------------------------------------------------------------------------------
+# Install R and packages
+#------------------------------------------------------------------------------
 
 ENV R_VERSION=4.3.3
+RUN dnf -y install R-${R_VERSION}
+    
+ENV R_HOME=/usr/lib64/R
 
-# install R
-RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
-    dnf config-manager --set-enabled powertools && \
-    dnf -y install R-${R_VERSION}
+# enable multithreaded build for R packages
+RUN echo 'options(Ncpus = max(c(parallel::detectCores()-1, 1)))' >> $R_HOME/etc/Rprofile.site
+
+# set CRAN repository snapshot for standard package installs
+ENV R_REPOSITORY=https://packagemanager.posit.co/cran/__linux__/centos8/2024-03-20
+RUN echo "options(repos = c(CRAN = \"$R_REPOSITORY\"))" >> $R_HOME/etc/Rprofile.site
+
+# use the remotes package to manage installations
+RUN Rscript -e "install.packages('remotes')"
+
+# install packages required for ETL process
+RUN \
+    Rscript -e "remotes::install_cran('dplyr')" \
+    && Rscript -e "remotes::install_cran('devtools')" \
+    && Rscript -e "devtools::install_github('cjendres1/nhanes@97f1850')" \
+    && Rscript -e "remotes::install_cran('DBI')" \
+    && Rscript -e "remotes::install_cran('RMariaDB')" \
+    && Rscript -e "remotes::install_cran('optparse')"
     
 ENTRYPOINT ["/startup/startup.sh"]
