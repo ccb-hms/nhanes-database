@@ -1,0 +1,47 @@
+# experiment with getting a functional interactive environment with R installed in 
+# a standard mariadb columnstore container
+
+# docker build --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
+
+# docker \
+#     run \
+#         -d \
+#         --rm \
+#         -p 2200:22 \
+#         -p 3306:3306 \
+#         --shm-size=512m \
+#         -e PM1=mcs1 \
+#         --hostname=mcs1 \
+#         --name mcs1 \
+#         -e 'CONTAINER_USER_USERNAME=test' \
+#         -e 'CONTAINER_USER_PASSWORD=test' \
+#         mariadb-test
+
+# ssh test@127.0.0.1 -p 2200 -Y -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=/dev/null
+
+# this just extends the MariaDB container, so the default credntials should work: admin:C0lumnStore!
+# to log in to the database
+
+# mysql -h 127.0.0.1 -P 3306 -u admin -p
+
+FROM mariadb/columnstore
+
+# install sshd
+RUN dnf -y install openssh-server openssh-clients; \
+    sed -i 's/^\(UsePAM yes\)/# \1/' /etc/ssh/sshd_config; \
+    ssh-keygen -q -t rsa -b 2048 -f /etc/ssh/ssh_host_rsa_key -N '' && \
+    ssh-keygen -q -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key -N '' && \
+    ssh-keygen -t dsa -f /etc/ssh/ssh_host_ed25519_key  -N ''; \
+    dnf clean all;
+
+EXPOSE 22
+
+# copy startup script
+RUN mkdir /startup
+COPY Container/startup.sh /startup/startup.sh
+RUN chmod 700 /startup/startup.sh
+
+# DEBUG
+RUN echo "root:password" | chpasswd
+
+ENTRYPOINT ["/startup/startup.sh"]
