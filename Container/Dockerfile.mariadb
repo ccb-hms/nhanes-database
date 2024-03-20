@@ -1,7 +1,9 @@
 # experiment with getting a functional interactive environment with R installed in 
 # a standard mariadb columnstore container
 
-# docker build --no-cache --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
+# Here is a simple example of bulding, running and interacting with the container:
+
+# docker build --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
 
 # docker \
 #     run \
@@ -66,7 +68,17 @@ RUN mkdir /startup
 COPY Container/startup.sh /startup/startup.sh
 RUN chmod 700 /startup/startup.sh
 
-# DEBUG
-RUN echo "root:password" | chpasswd
+# install unixODBC
+RUN dnf makecache && \
+    dnf -y install \ 
+    unixODBC-devel  \
+    mariadb-connector-odbc
 
+ENV R_VERSION=4.3.3
+
+# install R
+RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+    dnf config-manager --set-enabled powertools && \
+    dnf -y install R-${R_VERSION}
+    
 ENTRYPOINT ["/startup/startup.sh"]
