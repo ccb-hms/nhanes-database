@@ -36,27 +36,25 @@ runningInContainerBuild = opt[["container-build"]]
 
 # parameters to connect to SQL
 sqlHost = "localhost"
-sqlUserName = "sa"
-sqlPassword = "yourStrong(!)Password"
-sqlDefaultDb = "master"
+sqlUserName = "admin"
+sqlPassword = "C0lumnStore!"
 
-
-# loop waiting for SQL Server database to become available
+# loop waiting for SQL database to become available
 for (i in 1:60) {
     cn = tryCatch(
         # connect to SQL
-        MsSqlTools::connectMsSqlSqlLogin(
-            server = sqlHost, 
-            user = sqlUserName, 
-            password = sqlPassword, 
-            database = sqlDefaultDb
-        ), warning = function(e) {
+        RMariaDB::dbConnect(
+          drv=RMariaDB::MariaDB(),
+          username=sqlUserName,
+          password=sqlPassword,
+          host=sqlHost
+        )
+        , warning = function(e) {
             return(NA)
         }, error = function(e) {
             return(NA)
         }
     )
-    
     suppressWarnings({
          if (is.na(cn)) {
             Sys.sleep(10)
@@ -64,12 +62,11 @@ for (i in 1:60) {
             break
         }
     })
-   
 }
 
 suppressWarnings({
     if (is.na(cn)) {
-        stop("could not connect to SQL Server")
+        stop("could not connect to SQL database")
     }
 })
 
@@ -122,20 +119,15 @@ names(dataTypes) = uniqueUpper
 
 if (!opt[["include-exclusions"]]){
   # create landing zone for the raw data, set recovery mode to simple
-  SqlTools::dbSendUpdate(cn, "CREATE DATABASE NhanesLandingZone")
-  SqlTools::dbSendUpdate(cn, "ALTER DATABASE [NhanesLandingZone] SET RECOVERY SIMPLE")
-  SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
-  SqlTools::dbSendUpdate(cn, "CREATE SCHEMA Raw")
-  SqlTools::dbSendUpdate(cn, "CREATE SCHEMA Translated")
-  SqlTools::dbSendUpdate(cn, "CREATE SCHEMA Metadata")
-  SqlTools::dbSendUpdate(cn, "CREATE SCHEMA Ontology")
+  DBI::dbExecute(cn, "CREATE DATABASE NhanesRaw")
+  DBI::dbExecute(cn, "CREATE DATABASE NhanesTranslated")
+  DBI::dbExecute(cn, "CREATE DATABASE NhanesMetadata")
+  DBI::dbExecute(cn, "CREATE DATABASE NhanesOntology")
 }
 
-SqlTools::dbSendUpdate(cn, "USE NhanesLandingZone")
-
 # create the ExcludedTables table in SQL
-SqlTools::dbSendUpdate(cn, "
-    CREATE TABLE NhanesLandingZone.Metadata.ExcludedTables (
+DBI::dbExecute(cn, "
+    CREATE TABLE NhanesMetadata.ExcludedTables (
         TableName varchar(64),
         Reason varchar(64)
     )
@@ -143,16 +135,13 @@ SqlTools::dbSendUpdate(cn, "
 
 # run bulk insert
 insertStatement = paste(sep="", "
-    BULK INSERT NhanesLandingZone.Metadata.ExcludedTables FROM '/NHANES/excluded_tables.tsv'
-    WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')")
+    LOAD DATA INFILE '/NHANES/excluded_tables.tsv' INTO TABLE NhanesMetadata.ExcludedTables;
+")
 
-SqlTools::dbSendUpdate(cn, insertStatement)
+DBI::dbExecute(cn, insertStatement)
 
 # shrink transaction log
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
-
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+DBI::dbExecute(cn, "FLUSH BINARY LOGS")
 
 # prevent scientific notation
 options(scipen = 15)
@@ -306,14 +295,14 @@ for (i in i:length(dataTypes)) {
         m,
         file = currOutputFileName,
         sep = "\t",
-        na = "",
+        na = "\\N",
         row.names = FALSE,
         col.names = FALSE,
         quote = FALSE
       )
 
       # generate SQL table definitions from column types in tibbles
-      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("Raw", currDataType, sep="."), m)
+      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("NhanesRaw", currDataType, sep="."), row.names=FALSE, m)
 
       # change TEXT to VARCHAR(256)
       createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
@@ -331,25 +320,23 @@ for (i in i:length(dataTypes)) {
       # remove double quotes, which interferes with the schema specification
       createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
 
+      # make it a columnstore table
+      createTableQuery = paste(sep="", createTableQuery, "  ENGINE=ColumnStore")
+    
       # create the table in SQL
-      SqlTools::dbSendUpdate(cn, createTableQuery)
+      DBI::dbExecute(cn, createTableQuery)
       
       # run bulk insert
+      # LOAD DATA INFILE '/NHANES/excluded_tables.tsv' INTO TABLE NhanesMetadata.ExcludedTables
       insertStatement = paste(sep="",
-                              "BULK INSERT [NhanesLandingZone].[Raw].",
-                              currDataType,
-                              " FROM '",
+                              "LOAD DATA INFILE '",
                               currOutputFileName,
-                              "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t', ROWTERMINATOR = '\n')"
+                              "' INTO TABLE NhanesRaw.",
+                              currDataType
       )
 
-      SqlTools::dbSendUpdate(cn, insertStatement)
+      DBI::dbExecute(cn, insertStatement)
       
-      indexStatement = paste(sep="",
-        "CREATE CLUSTERED COLUMNSTORE INDEX ccix ON Raw.", currDataType)
-                              
-      SqlTools::dbSendUpdate(cn, indexStatement)
-
       # if we don't want to keep the derived text files, then delete to save disk space
       if (!persistTextFiles) {
         file.remove(currOutputFileName)
@@ -361,128 +348,122 @@ for (i in i:length(dataTypes)) {
     gc()
 }
 
-if (!opt[["include-exclusions"]]) {
-      # generate CREATE TABLE statement
-      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "Metadata.QuestionnaireVariables", questionnaireVariables)
+# TODO: refactored to here
 
-      # fix TEXT column types
-      createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
 
-      # change DOUBLE to float
-      createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+# if (!opt[["include-exclusions"]]) {
+#       # generate CREATE TABLE statement
+#       createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "Metadata.QuestionnaireVariables", questionnaireVariables)
 
-      # remove double quotes, which interferes with the schema specification
-      createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
+#       # fix TEXT column types
+#       createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
 
-      # create the table in SQL
-      SqlTools::dbSendUpdate(cn, createTableQuery)
+#       # change DOUBLE to float
+#       createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+
+#       # remove double quotes, which interferes with the schema specification
+#       createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
+
+#       # create the table in SQL
+#       DBI::dbExecute(cn, createTableQuery)
       
-      # generate file name for temporary output
-      currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
+#       # generate file name for temporary output
+#       currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
 
-      # write questionnaireVariables table to disk
-      write.table(
-        questionnaireVariables,
-        file = currOutputFileName,
-        sep = "\t",
-        na = "",
-        append=TRUE,
-        row.names = FALSE,
-        col.names = FALSE,
-        quote = FALSE
-      )
-        # issue BULK INSERT
-      insertStatement = paste(sep="",
-                              "BULK INSERT ",
-                              "Metadata.QuestionnaireVariables",
-                              " FROM '",
-                              currOutputFileName,
-                              "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-      )
-      SqlTools::dbSendUpdate(cn, insertStatement)
+#       # write questionnaireVariables table to disk
+#       write.table(
+#         questionnaireVariables,
+#         file = currOutputFileName,
+#         sep = "\t",
+#         na = "",
+#         append=TRUE,
+#         row.names = FALSE,
+#         col.names = FALSE,
+#         quote = FALSE
+#       )
+#         # issue BULK INSERT
+#       insertStatement = paste(sep="",
+#                               "BULK INSERT ",
+#                               "Metadata.QuestionnaireVariables",
+#                               " FROM '",
+#                               currOutputFileName,
+#                               "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+#       )
+#       DBI::dbExecute(cn, insertStatement)
 
-} else {
-      # generate file name for temporary output
-      currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
+# } else {
+#       # generate file name for temporary output
+#       currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
 
-      # write questionnaireVariables table to disk
-      write.table(
-        questionnaireVariables,
-        file = currOutputFileName,
-        sep = "\t",
-        na = "",
-        append=TRUE,
-        row.names = FALSE,
-        col.names = FALSE,
-        quote = FALSE
-      )
-        # issue BULK INSERT
-      insertStatement = paste(sep="",
-                              "BULK INSERT ",
-                              "Metadata.QuestionnaireVariables",
-                              " FROM '",
-                              currOutputFileName,
-                              "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-      )
-      SqlTools::dbSendUpdate(cn, insertStatement)
-}
+#       # write questionnaireVariables table to disk
+#       write.table(
+#         questionnaireVariables,
+#         file = currOutputFileName,
+#         sep = "\t",
+#         na = "",
+#         append=TRUE,
+#         row.names = FALSE,
+#         col.names = FALSE,
+#         quote = FALSE
+#       )
+#         # issue BULK INSERT
+#       insertStatement = paste(sep="",
+#                               "BULK INSERT ",
+#                               "Metadata.QuestionnaireVariables",
+#                               " FROM '",
+#                               currOutputFileName,
+#                               "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+#       )
+#       DBI::dbExecute(cn, insertStatement)
+# }
 
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+# # shrink transaction log
+# DBI::dbExecute(cn, "FLUSH BINARY LOGS")
 
-# shrink transaction log
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+# if (!opt[["include-exclusions"]]) {
+# # create a table to hold records of the failed file downloads
+# DBI::dbExecute(cn, "CREATE TABLE Metadata.DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
 
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
+# # generate file name for temporary output
+# currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
 
-if (!opt[["include-exclusions"]]) {
-# create a table to hold records of the failed file downloads
-SqlTools::dbSendUpdate(cn, "CREATE TABLE Metadata.DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
+# # write failed file downloads table to disk
+# write.table(
+#   downloadErrors,
+#   file = currOutputFileName,
+#   sep = "\t",
+#   na = "",
+#   append=TRUE,
+#   row.names = FALSE,
+#   col.names = FALSE,
+#   quote = FALSE
+# )
 
-# generate file name for temporary output
-currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
+# # issue BULK INSERT
+# insertStatement = paste(sep="",
+#                         "BULK INSERT ",
+#                         "Metadata.DownloadErrors",
+#                         " FROM '",
+#                         currOutputFileName,
+#                         "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
+# )
 
-# write failed file downloads table to disk
-write.table(
-  downloadErrors,
-  file = currOutputFileName,
-  sep = "\t",
-  na = "",
-  append=TRUE,
-  row.names = FALSE,
-  col.names = FALSE,
-  quote = FALSE
-)
+# DBI::dbExecute(cn, insertStatement)
 
-# issue BULK INSERT
-insertStatement = paste(sep="",
-                        "BULK INSERT ",
-                        "Metadata.DownloadErrors",
-                        " FROM '",
-                        currOutputFileName,
-                        "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-)
+# # shrink transaction log
+# DBI::dbExecute(cn, "FLUSH BINARY LOGS")
 
-SqlTools::dbSendUpdate(cn, insertStatement)
+# # shrink tempdb
+# DBI::dbExecute(cn, "USE tempdb")
 
-# shrink transaction log
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
+# tempFiles = DBI::dbGetQuery(cn, "
+#                         SELECT name FROM TempDB.sys.sysfiles
+#                         ")
 
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
-
-# shrink tempdb
-SqlTools::dbSendUpdate(cn, "USE tempdb")
-
-tempFiles = DBI::dbGetQuery(cn, "
-                        SELECT name FROM TempDB.sys.sysfiles
-                        ")
-
-for (i in 1:nrow(tempFiles)) {    
-    currTempFileName = tempFiles[i,1]
-    SqlTools::dbSendUpdate(cn, paste("DBCC SHRINKFILE(",currTempFileName,", 8)", sep=''))
-}
+# for (i in 1:nrow(tempFiles)) {    
+#     currTempFileName = tempFiles[i,1]
+#     DBI::dbExecute(cn, paste("DBCC SHRINKFILE(",currTempFileName,", 8)", sep=''))
+# }
 
 # shutdown the database engine cleanly
-SqlTools::dbSendUpdate(cn, "SHUTDOWN")
+DBI::dbExecute(cn, "SHUTDOWN")

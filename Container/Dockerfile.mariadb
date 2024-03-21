@@ -83,11 +83,6 @@ RUN dnf -y install openssh-server openssh-clients; \
     dnf clean all;
 EXPOSE 22
 
-# Copy container startup script
-RUN mkdir /startup
-COPY Container/startup.sh /startup/startup.sh
-RUN chmod 700 /startup/startup.sh
-
 # Enable powertools
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
     dnf config-manager --set-enabled powertools
@@ -177,7 +172,10 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 RUN printf "[mysqld]\nskip-grant-tables" >> /etc/my.cnf
 
 # Copy the DB build / test scripts
+# This is the base scratch work directory
 RUN mkdir /NHANES
+# This is where the ETL process will write intermediate results
+RUN mkdir /NHANES/Data
 COPY Code/R/download.R /NHANES/download.R
 COPY Code/R/excluded_tables.tsv /NHANES/excluded_tables.tsv
 COPY Code/R/regressionExample.R /NHANES/regressionExample.R
@@ -186,11 +184,18 @@ COPY Testing/Code/containerBuildTests.R /NHANES/containerBuildTests.R
 COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
 RUN chmod -R 777 /NHANES
 
-# # Run the download and database build
-# # TODO: fix this to start MariaDB services before calling Rscript
-# # TODO: Translate T-SQL in this script to work with MariaDB.
-# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \ 
-# 	&& Rscript /NHANES/download.R --container-build=TRUE
+# provision the container -- this only needs to be done once, then 
+# we can just call start-services to start the whole DB stack
+RUN start-services& \
+    sleep 30 \
+    && provision
+
+# Run the download and database build
+# TODO: fix this to start MariaDB services before calling Rscript
+# TODO: Translate T-SQL in this script to work with MariaDB.
+RUN  start-services 2>&1 /dev/null & \ 
+    sleep 30 \
+	&& Rscript /NHANES/download.R --container-build=TRUE
 
 # # Clone the metadata repository and checkout the version that we want 
 # # to use for the import
@@ -232,6 +237,11 @@ RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> $R_HOME
 
 RUN echo "export EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/profile.d/EPICONDUCTOR_CONTAINER_VERSION.sh
 RUN echo "export EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/profile.d/EPICONDUCTOR_COLLECTION_DATE.sh
+
+# Copy container startup script
+RUN mkdir /startup
+COPY Container/startup.sh /startup/startup.sh
+RUN chmod 700 /startup/startup.sh
 
 #------------------------------------------------------------------------------
 # Run tests
