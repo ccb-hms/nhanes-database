@@ -1,11 +1,13 @@
 # experiment with getting a functional interactive environment with R installed in 
 # a standard mariadb columnstore container
 
-# Here is a simple example of bulding, running and interacting with the container
-# (note that we need the --add-host option because the MariaDB services 
-# attempt to resolve the container's hostname, which fails at build time):
+# Here is a simple example of bulding, running and interacting with the container.
+# Note that we need the --add-host option because the MariaDB services 
+# attempt to resolve the container's hostname, which fails at build time.
+# We need --platform=linux/amd64 in order to get SQL Server to install.  Once
+# we can get rid of that, then we can run native builds.
 
-# docker build --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
+# docker build --platform=linux/amd64 --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
 
 # docker \
 #     run \
@@ -13,6 +15,7 @@
 #         --rm \
 #         -p 2200:22 \
 #         -p 3306:3306 \
+#         -p 1433:1433 \
 #         --shm-size=512m \
 #         -e PM1=mcs1 \
 #         --hostname=mcs1 \
@@ -21,7 +24,7 @@
 #         -e 'CONTAINER_USER_PASSWORD=test' \
 #         mariadb-test
 
-# ssh test@127.0.0.1 -p 2200 -Y -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=/dev/null
+# ssh test@127.0.0.1 -p 2200 -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=/dev/null
 
 # this just extends the MariaDB container, so the default credntials should work: admin:C0lumnStore!
 # to log in to the database
@@ -57,6 +60,14 @@
 # cn = RMariaDB::dbConnect(RMariaDB::MariaDB(), dbname="analytics", username="admin", password="C0lumnStore!", host="localhost")
 # DBI::dbGetQuery(cn, "SELECT * FROM analytics.T1")
 
+# example of starting the DB engine and waiting for it to become available to execute SQL
+# the call to start-services goes in the background, provision waits on the services to 
+# become available, then exits and passes control to the next statement
+# RUN start-services& \
+#     provision \
+#     && echo "show databases; CREATE DATABASE NHANES; show databases; CREATE TABLE NHANES.TestTable (id int) ENGINE=ColumnStore; INSERT INTO NHANES.TestTable VALUES (123); SELECT * FROM NHANES.TestTable;" | mariadb -h 127.0.0.1 -P 3306 -u admin
+
+
 FROM mariadb/columnstore
 
 #------------------------------------------------------------------------------
@@ -77,7 +88,7 @@ RUN mkdir /startup
 COPY Container/startup.sh /startup/startup.sh
 RUN chmod 700 /startup/startup.sh
 
-# Install system libraries
+# Enable powertools
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
     dnf config-manager --set-enabled powertools
 
@@ -108,6 +119,7 @@ RUN dnf makecache && \
 # Install R and packages
 #------------------------------------------------------------------------------
 
+# declare R version and install it
 ENV R_VERSION=4.3.3
 RUN dnf -y install R-${R_VERSION}
     
@@ -133,13 +145,34 @@ RUN \
     && Rscript -e "remotes::install_cran('RMariaDB')" \
     && Rscript -e "remotes::install_cran('optparse')" \
     && Rscript -e "remotes::install_cran('glue')" \
-    && Rscript -e "remotes::install_cran('stringr')"
+    && Rscript -e "remotes::install_cran('stringr')" \
+    && Rscript -e "remotes::install_cran('odbc')"
 
 #------------------------------------------------------------------------------
 # Build the database
 #------------------------------------------------------------------------------
 
-# disable GRANTs (anyone can log in without password)
+# TODO: remove the following block when nhanesA is fixed!
+#****************************************************************************************************
+# Install SQL Server and associated ODBC driver: this is a hack to get nhanesA to cooperate
+ENV ACCEPT_EULA=Y
+ENV SA_PASSWORD=yourStrong(!)Password
+RUN mkdir -p -m 770 /var/opt/mssql && chgrp -R 0 /var/opt/mssql
+RUN curl -o /etc/yum.repos.d/mssql-server.repo https://packages.microsoft.com/config/rhel/8/mssql-server-2022.repo
+RUN yum install -y mssql-server
+RUN curl https://packages.microsoft.com/config/rhel/8/prod.repo | tee /etc/yum.repos.d/mssql-release.repo
+RUN ACCEPT_EULA=Y yum install -y msodbcsql17 mssql-tools18
+
+# Create a dummy DB in SQL Server (sleep to let the DB engine come up before attempting to connect)
+RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+    && sleep 30 \
+    && echo "CREATE DATABASE NhanesLandingZone;" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'yourStrong(!)Password' \
+    && echo "CREATE SCHEMA Metadata" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -d NhanesLandingZone -U sa -P 'yourStrong(!)Password' \
+    && echo "CREATE TABLE Metadata.QuestionnaireVariables (TableName varchar(256))" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -d NhanesLandingZone -U sa -P 'yourStrong(!)Password'
+#****************************************************************************************************
+
+# Disable GRANTs (anyone can log in to MariaDB without password) -- required to run the 
+# DB engine at build time
 RUN printf "[mysqld]\nskip-grant-tables" >> /etc/my.cnf
 
 # Copy the DB build / test scripts
@@ -199,16 +232,15 @@ RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> $R_HOME
 RUN echo "export EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/profile.d/EPICONDUCTOR_CONTAINER_VERSION.sh
 RUN echo "export EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/profile.d/EPICONDUCTOR_COLLECTION_DATE.sh
 
-# # Run tests
+#------------------------------------------------------------------------------
+# Run tests
+#------------------------------------------------------------------------------
+
+# # TODO: fix this to start MariaDB services before calling Rscript
+# # TODO: Translate T-SQL in this script to work with MariaDB
 # RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 # 	&& Rscript /NHANES/containerBuildTests.R
 
-# example of starting the DB engine and waiting for it to become available to execute SQL
-# the call to start-services goes in the background, provision waits on the services to 
-# become available, then exits and passes control to the next statement
-# RUN start-services& \
-#     provision \
-#     && echo "show databases; CREATE DATABASE NHANES; show databases; CREATE TABLE NHANES.TestTable (id int) ENGINE=ColumnStore; INSERT INTO NHANES.TestTable VALUES (123); SELECT * FROM NHANES.TestTable;" | mariadb -h 127.0.0.1 -P 3306 -u admin
+# TODO: possibly re-enable GRANTs
 
 ENTRYPOINT ["/startup/startup.sh"]
-# mariadb -h 127.0.0.1 -P 3306 -u test
