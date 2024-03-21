@@ -168,7 +168,8 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
     && sleep 30 \
     && echo "CREATE DATABASE NhanesLandingZone;" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'yourStrong(!)Password' \
     && echo "CREATE SCHEMA Metadata" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -d NhanesLandingZone -U sa -P 'yourStrong(!)Password' \
-    && echo "CREATE TABLE Metadata.QuestionnaireVariables (TableName varchar(256))" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -d NhanesLandingZone -U sa -P 'yourStrong(!)Password'
+    && echo "CREATE TABLE Metadata.QuestionnaireVariables (TableName varchar(256))" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -d NhanesLandingZone -U sa -P 'yourStrong(!)Password' \
+    && echo "ALTER DATABASE NhanesLandingZone SET READ_ONLY WITH NO_WAIT" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'yourStrong(!)Password' \
 #****************************************************************************************************
 
 # Disable GRANTs (anyone can log in to MariaDB without password) -- required to run the 
