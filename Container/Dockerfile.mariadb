@@ -204,6 +204,8 @@ RUN echo "export EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> 
 # 	&& Rscript /NHANES/containerBuildTests.R
 
 # example of starting the DB engine and waiting for it to become available to execute SQL
+# the call to start-services goes in the background, provision waits on the services to 
+# become available, then exits and passes control to the next statement
 # RUN start-services& \
 #     provision \
 #     && echo "show databases; CREATE DATABASE NHANES; show databases; CREATE TABLE NHANES.TestTable (id int) ENGINE=ColumnStore; INSERT INTO NHANES.TestTable VALUES (123); SELECT * FROM NHANES.TestTable;" | mariadb -h 127.0.0.1 -P 3306 -u admin
