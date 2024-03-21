@@ -1,9 +1,11 @@
 # experiment with getting a functional interactive environment with R installed in 
 # a standard mariadb columnstore container
 
-# Here is a simple example of bulding, running and interacting with the container:
+# Here is a simple example of bulding, running and interacting with the container
+# (note that we need the --add-host option because the MariaDB services 
+# attempt to resolve the container's hostname, which fails at build time):
 
-# docker build --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
+# docker build --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
 
 # docker \
 #     run \
@@ -61,7 +63,7 @@ FROM mariadb/columnstore
 # Configure the system
 #------------------------------------------------------------------------------
 
-# install sshd
+# Install and configure sshd
 RUN dnf -y install openssh-server openssh-clients; \
     sed -i 's/^\(UsePAM yes\)/# \1/' /etc/ssh/sshd_config; \
     ssh-keygen -q -t rsa -b 2048 -f /etc/ssh/ssh_host_rsa_key -N '' && \
@@ -70,23 +72,22 @@ RUN dnf -y install openssh-server openssh-clients; \
     dnf clean all;
 EXPOSE 22
 
-# copy startup script
+# Copy container startup script
 RUN mkdir /startup
 COPY Container/startup.sh /startup/startup.sh
 RUN chmod 700 /startup/startup.sh
 
-# install system libraries
-
+# Install system libraries
 RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
     dnf config-manager --set-enabled powertools
 
-# install unixODBC
+# Install unixODBC
 RUN dnf makecache && \
     dnf -y install \ 
         unixODBC-devel  \
         mariadb-connector-odbc
 
-# additional libraries to support the R environment
+# Install additional libraries to support the R environment
 RUN dnf makecache && \
     dnf -y install \ 
         openssl-devel  \
@@ -99,7 +100,8 @@ RUN dnf makecache && \
         libtiff-devel \
         libjpeg-devel \
         libgit2-devel \
-        mysql-devel
+        mysql-devel \
+        git
 
 
 #------------------------------------------------------------------------------
@@ -110,24 +112,101 @@ ENV R_VERSION=4.3.3
 RUN dnf -y install R-${R_VERSION}
     
 ENV R_HOME=/usr/lib64/R
+RUN echo "export R_HOME=$R_HOME" >> /etc/profile.d/R_HOME.sh
 
-# enable multithreaded build for R packages
+# Enable multithreaded build for R packages
 RUN echo 'options(Ncpus = max(c(parallel::detectCores()-1, 1)))' >> $R_HOME/etc/Rprofile.site
 
-# set CRAN repository snapshot for standard package installs
+# Set CRAN repository snapshot for standard package installs
 ENV R_REPOSITORY=https://packagemanager.posit.co/cran/__linux__/centos8/2024-03-20
 RUN echo "options(repos = c(CRAN = \"$R_REPOSITORY\"))" >> $R_HOME/etc/Rprofile.site
 
-# use the remotes package to manage installations
+# Use the remotes package to manage installations
 RUN Rscript -e "install.packages('remotes')"
 
-# install packages required for ETL process
+# Install packages required for ETL process
 RUN \
     Rscript -e "remotes::install_cran('dplyr')" \
     && Rscript -e "remotes::install_cran('devtools')" \
     && Rscript -e "devtools::install_github('cjendres1/nhanes@97f1850')" \
     && Rscript -e "remotes::install_cran('DBI')" \
     && Rscript -e "remotes::install_cran('RMariaDB')" \
-    && Rscript -e "remotes::install_cran('optparse')"
-    
+    && Rscript -e "remotes::install_cran('optparse')" \
+    && Rscript -e "remotes::install_cran('glue')" \
+    && Rscript -e "remotes::install_cran('stringr')"
+
+#------------------------------------------------------------------------------
+# Build the database
+#------------------------------------------------------------------------------
+
+# disable GRANTs (anyone can log in without password)
+RUN printf "[mysqld]\nskip-grant-tables" >> /etc/my.cnf
+
+# Copy the DB build / test scripts
+RUN mkdir /NHANES
+COPY Code/R/download.R /NHANES/download.R
+COPY Code/R/excluded_tables.tsv /NHANES/excluded_tables.tsv
+COPY Code/R/regressionExample.R /NHANES/regressionExample.R
+COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
+COPY Testing/Code/containerBuildTests.R /NHANES/containerBuildTests.R
+COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
+RUN chmod -R 777 /NHANES
+
+# # Run the download and database build
+# # TODO: fix this to start MariaDB services before calling Rscript
+# # TODO: Translate T-SQL in this script to work with MariaDB.
+# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \ 
+# 	&& Rscript /NHANES/download.R --container-build=TRUE
+
+# # Clone the metadata repository and checkout the version that we want 
+# # to use for the import
+# WORKDIR /NHANES
+# RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
+# WORKDIR /NHANES/NHANES-metadata
+# RUN git fetch --tags
+# RUN git checkout tags/v3.10.0
+
+# # Import the metadata
+# # TODO: Fix this to start MariaDB services before calling Rscript.
+# # TODO: Translate T-SQL in this script to work with MariaDB.
+# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+# 	&& Rscript /NHANES/etlVariableCodebook.R
+
+# # Translate the coded responses
+# # TODO: Fix this to start MariaDB services before calling Rscript
+# # TODO: Fix this script to use the nhanesA functionality to translate the tables, write them to disk and import.
+# #       Translate T-SQL in this script to work with MariaDB.
+# WORKDIR /tmp
+# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+# 	&& Rscript /NHANES/translateRawTables.R
+
+
+#------------------------------------------------------------------------------
+# Final Odds and Ends
+#------------------------------------------------------------------------------
+
+# Allow modification of these locations so users can install R packages without warnings
+RUN chmod -R 777 $R_HOME/library
+RUN chmod -R 777 /usr/share/doc/R/html/packages.html
+
+# Declare which version of the container this is, and make it available inside the container 
+ENV EPICONDUCTOR_CONTAINER_VERSION v1.0.0-alpha
+ENV EPICONDUCTOR_COLLECTION_DATE 2024-03-20
+
+RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> $R_HOME/etc/Renviron.site
+RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> $R_HOME/etc/Renviron.site
+
+RUN echo "export EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/profile.d/EPICONDUCTOR_CONTAINER_VERSION.sh
+RUN echo "export EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/profile.d/EPICONDUCTOR_COLLECTION_DATE.sh
+
+# # Run tests
+# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+# 	&& Rscript /NHANES/containerBuildTests.R
+
+# example of starting the DB engine and waiting for it to become available to execute SQL
+# RUN start-services& \
+#     provision \
+#     && echo "show databases; CREATE DATABASE NHANES; show databases; CREATE TABLE NHANES.TestTable (id int) ENGINE=ColumnStore; INSERT INTO NHANES.TestTable VALUES (123); SELECT * FROM NHANES.TestTable;" | mariadb -h 127.0.0.1 -P 3306 -u admin
+
 ENTRYPOINT ["/startup/startup.sh"]
+# mariadb -h 127.0.0.1 -P 3306 -u test
