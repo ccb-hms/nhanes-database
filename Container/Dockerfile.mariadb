@@ -4,10 +4,8 @@
 # Here is a simple example of bulding, running and interacting with the container.
 # Note that we need the --add-host option because the MariaDB services 
 # attempt to resolve the container's hostname, which fails at build time.
-# We need --platform=linux/amd64 in order to get SQL Server to install.  Once
-# we can get rid of that, then we can run native builds.
 
-# docker build --platform=linux/amd64 --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
+# docker build --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
 
 # docker \
 #     run \
@@ -150,27 +148,6 @@ RUN chmod -R 777 /usr/share/doc/R/html/packages.html
 #------------------------------------------------------------------------------
 # Build the database
 #------------------------------------------------------------------------------
-
-#****************************************************************************************************
-# TODO: remove the following block when nhanesA is fixed!
-#****************************************************************************************************
-# Install SQL Server and associated ODBC driver: this is a hack to get nhanesA to cooperate
-ENV ACCEPT_EULA=Y
-ENV SA_PASSWORD=yourStrong(!)Password
-RUN mkdir -p -m 770 /var/opt/mssql && chgrp -R 0 /var/opt/mssql
-RUN curl -o /etc/yum.repos.d/mssql-server.repo https://packages.microsoft.com/config/rhel/8/mssql-server-2022.repo
-RUN yum install -y mssql-server
-RUN curl https://packages.microsoft.com/config/rhel/8/prod.repo | tee /etc/yum.repos.d/mssql-release.repo
-RUN ACCEPT_EULA=Y yum install -y msodbcsql17 mssql-tools18
-
-# Create a dummy DB in SQL Server (sleep to let the DB engine come up before attempting to connect)
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-    && sleep 30 \
-    && echo "CREATE DATABASE NhanesLandingZone;" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'yourStrong(!)Password' \
-    && echo "CREATE SCHEMA Metadata" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -d NhanesLandingZone -U sa -P 'yourStrong(!)Password' \
-    && echo "CREATE TABLE Metadata.QuestionnaireVariables (TableName varchar(256))" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -d NhanesLandingZone -U sa -P 'yourStrong(!)Password' \
-    && echo "ALTER DATABASE NhanesLandingZone SET READ_ONLY WITH NO_WAIT" | /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'yourStrong(!)Password'
-#****************************************************************************************************
 
 # Disable GRANTs (anyone can log in to MariaDB without password) -- required to run the 
 # DB engine at build time

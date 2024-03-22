@@ -16,6 +16,11 @@
 #         -e 'ACCEPT_EULA=Y' \
 #         -e 'SA_PASSWORD=yourStrong(!)Password' \
 #         nhanes-workbench
+
+# coax nhanesA to cooperate
+Sys.unsetenv("EPICONDUCTOR_CONTAINER_VERSION")
+Sys.unsetenv("EPICONDUCTOR_COLLECTION_DATE")
+
 options(timeout=100)
 optionList = list(
   optparse::make_option(c("--container-build"), type="logical", default=FALSE, 
@@ -98,9 +103,9 @@ write.table(
 
 if (!opt[["include-exclusions"]]) {
     fileListTable <- fileListTable[!grepl(paste(excludedTables$TableName, collapse = "|"), fileListTable$'Table'),]
-} else{
+} else {
     fileListTable <- fileListTable[grepl(paste(excludedTables$TableName, collapse = "|"), fileListTable$'Table'),]  
- }
+}
 
 # enumerate distinct data types
 fileListTable$"Table" <- strtrim(fileListTable$"Table", 128)
@@ -152,26 +157,26 @@ questionnaireVariables = dplyr::tibble(
   TableName=character()
 )
 
-#--------------------------------------------------------------------------------------------------------
-# performance notes for large XPTs:
-# 14.6G for a single PAXMIN
-# 10G after gc()
-# baloons to 32G after second read
-# 20G after gc()
-# 40 G during bind_rows
-# 20 G after rm XPTs and gc()
-# 12G file 
-#--------------------------------------------------------------------------------------------------------
-
 downloadErrors = dplyr::tibble(
   DataType=character(), 
   FileUrl=character(), 
   Error=character()
- )
+)
 
-# enable restart
-i=1
-for (i in i:length(dataTypes)) {
+# this function is intended to be called by mclapply
+# and loads a single NHANES table into the DB
+importRawTableToDb <- function(i) {
+    
+    # since this will get run in a fork'd process, we need to 
+    # establish a new connection object, can't share the one
+    # from the parent process
+    cn = RMariaDB::dbConnect(
+          drv=RMariaDB::MariaDB(),
+          username=sqlUserName,
+          password=sqlPassword,
+          host=sqlHost
+        )
+  
     # get the name of the data type
     currDataType = toupper(dataTypes[i])
 
@@ -191,50 +196,59 @@ for (i in i:length(dataTypes)) {
       currYears = fileListTable[currRow, "Years"]
 
       #TODO move these to the exlusions group above^^^
-      cat("reading ", currFileUrl, "\n")
+      cat("reading ", currFileUrl, " (", i, "/",  length(dataTypes), ")\n")
 
       # attempt to download each file and log errors
-      result = tryCatch({
-        nhanesA::nhanesFromURL(currFileUrl, translated = FALSE)
-      }, warning = function(w) {
-        downloadErrors <<- dplyr::bind_rows(
-          downloadErrors, 
-          dplyr::bind_cols(
+      result = "error"
+      nDownloadTries = 0
+      maxDownloadTries = 6
+      
+      while (typeof(result)!="list" && (nDownloadTries < maxDownloadTries)) {
+        
+        nDownloadTries = nDownloadTries + 1
+        
+        # attempt download
+        result = tryCatch({
+          nhanesA::nhanesFromURL(currFileUrl, translated = FALSE)
+        }, warning = function(w) {
+          downloadErrors <<- dplyr::bind_cols(
             "DataType" = currDataType, 
             "FileUrl" = currFileUrl,
             "Error" = "warning"
           )
-        )
-        return("warning")
-      }, error = function(e) {
-        downloadErrors <<- dplyr::bind_rows(
-          downloadErrors, 
-          dplyr::bind_cols(
+          return("warning")
+        }, error = function(e) {
+          downloadErrors <<- dplyr::bind_cols(
             "DataType" = currDataType, 
             "FileUrl" = currFileUrl,
             "Error" = "error"
           )
-        )
-        return("error")
-      })
-
-      if (typeof(result)!='list') {
-        next
+          return("error")
+        })
+        
+        # if that failed, wait a few seconds and try again
+        if ((typeof(result)!="list") && (result == "error")) {
+          Sys.sleep(10)
+        }
+      }
+      
+      # if we failed after the above attempts, return the error
+      # along with NA in place of questionaireVariables.
+      # i guess we let warnings ride...
+      if (typeof(result)!="list" && (result == "error")) {
+        return(list(downloadErrors, NA))
       }
 
       # save the survey years in the demographics table
-      if (currDataType == "DEMO") {
+      if (length(grep(pattern="DEMO", x=currDataType, fixed=TRUE)) > 0) {
         years = dplyr::tibble("years" = rep(x=currYears, times=nrow(result)))
         result = dplyr::bind_cols(result, years)
       }
 
-      questionnaireVariables =
-        dplyr::bind_rows(
-          questionnaireVariables, 
-          dplyr::bind_cols( 
-            "Variable" = toupper(colnames(result)),
-            "TableName" = rep(currDataType, times = ncol(result))
-          )
+      # save the column name / table relationships, will be returned later
+      questionnaireVariables = dplyr::bind_cols( 
+          "Variable" = toupper(colnames(result)),
+          "TableName" = rep(currDataType, times = ncol(result))
         )
 
       dfList[[length(dfList) + 1]] = result
@@ -367,7 +381,20 @@ for (i in i:length(dataTypes)) {
     # keep memory as clean as possible
     rm(m)
     gc()
+    
+    return(list(downloadErrors, questionnaireVariables))
 }
+
+# import in parallel using all available cores
+parResultList = 
+  parallel::mclapply(
+    FUN=importRawTableToDb, 
+    X=1:length(dataTypes), 
+    mc.cores=parallel::detectCores()
+  )
+
+# TODO:
+# unwind the result list to get any errors, and reconstruct the questionnaireVariables table
 
 # TODO: refactored to here
 

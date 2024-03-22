@@ -12,10 +12,6 @@ else
 	&& chsh -s /bin/bash ${CONTAINER_USER_USERNAME}
 fi
 
-# TODO: remove this when nhanesA gets fixed
-# Start SQL Server: this is a hack to make nhanesA cooperate
-runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr  --accept-eula --reset-sa-password &'
-
 # start sshd
 /usr/sbin/sshd -D&
 
