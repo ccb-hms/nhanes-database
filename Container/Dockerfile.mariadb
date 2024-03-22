@@ -142,11 +142,16 @@ RUN \
     && Rscript -e "remotes::install_cran('glue')" \
     && Rscript -e "remotes::install_cran('stringr')" \
     && Rscript -e "remotes::install_cran('odbc')"
+    
+# Allow modification of these locations so users can install R packages without warnings
+RUN chmod -R 777 $R_HOME/library
+RUN chmod -R 777 /usr/share/doc/R/html/packages.html
 
 #------------------------------------------------------------------------------
 # Build the database
 #------------------------------------------------------------------------------
 
+#****************************************************************************************************
 # TODO: remove the following block when nhanesA is fixed!
 #****************************************************************************************************
 # Install SQL Server and associated ODBC driver: this is a hack to get nhanesA to cooperate
@@ -169,7 +174,11 @@ RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
 
 # Disable GRANTs (anyone can log in to MariaDB without password) -- required to run the 
 # DB engine at build time
-RUN printf "[mysqld]\nskip-grant-tables" >> /etc/my.cnf
+RUN printf "[mysqld]\nskip-grant-tables\n" >> /etc/my.cnf
+
+# Tell the DB engine to use cpimport for bulk import operations, see:
+# https://mariadb.com/docs/server/ref/mdb/system-variables/columnstore_use_import_for_batchinsert/
+RUN printf "columnstore_use_import_for_batchinsert=ALWAYS" >> /etc/my.cnf
 
 # Copy the DB build / test scripts
 # This is the base scratch work directory
@@ -184,6 +193,9 @@ COPY Testing/Code/containerBuildTests.R /NHANES/containerBuildTests.R
 COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
 RUN chmod -R 777 /NHANES
 
+# Disable logging to stdout
+RUN sed -e '/tail/s/^/#/g' -i /usr/bin/start-services
+
 # provision the container -- this only needs to be done once, then 
 # we can just call start-services to start the whole DB stack
 RUN start-services& \
@@ -193,9 +205,9 @@ RUN start-services& \
 # Run the download and database build
 # TODO: fix this to start MariaDB services before calling Rscript
 # TODO: Translate T-SQL in this script to work with MariaDB.
-RUN  start-services 2>&1 /dev/null & \ 
-    sleep 30 \
-	&& Rscript /NHANES/download.R --container-build=TRUE
+# RUN  start-services & \ 
+#     sleep 30 \
+# 	&& Rscript /NHANES/download.R --container-build=TRUE
 
 # # Clone the metadata repository and checkout the version that we want 
 # # to use for the import
@@ -223,10 +235,6 @@ RUN  start-services 2>&1 /dev/null & \
 #------------------------------------------------------------------------------
 # Final Odds and Ends
 #------------------------------------------------------------------------------
-
-# Allow modification of these locations so users can install R packages without warnings
-RUN chmod -R 777 $R_HOME/library
-RUN chmod -R 777 /usr/share/doc/R/html/packages.html
 
 # Declare which version of the container this is, and make it available inside the container 
 ENV EPICONDUCTOR_CONTAINER_VERSION v1.0.0-alpha

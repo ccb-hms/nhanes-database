@@ -19,5 +19,7 @@ runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr  --accept-eula --reset-sa-passw
 # start sshd
 /usr/sbin/sshd -D&
 
-# # start the MariaDB services in the background
+# # start the MariaDB services
 start-services
+
+wait

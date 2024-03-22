@@ -327,7 +327,6 @@ for (i in i:length(dataTypes)) {
       DBI::dbExecute(cn, createTableQuery)
       
       # run bulk insert
-      # LOAD DATA INFILE '/NHANES/excluded_tables.tsv' INTO TABLE NhanesMetadata.ExcludedTables
       insertStatement = paste(sep="",
                               "LOAD DATA INFILE '",
                               currOutputFileName,
