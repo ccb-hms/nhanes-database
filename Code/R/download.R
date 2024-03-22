@@ -163,15 +163,14 @@ questionnaireVariables = dplyr::tibble(
 # 12G file 
 #--------------------------------------------------------------------------------------------------------
 
-
-# enable restart
-i=1
 downloadErrors = dplyr::tibble(
   DataType=character(), 
   FileUrl=character(), 
   Error=character()
  )
 
+# enable restart
+i=1
 for (i in i:length(dataTypes)) {
     # get the name of the data type
     currDataType = toupper(dataTypes[i])
@@ -287,6 +286,7 @@ for (i in i:length(dataTypes)) {
 
           # fix any embedded line endings
           m[,currCharColumn] = gsub(m[,currCharColumn], pattern = "\r\n", replacement = "", useBytes = TRUE, fixed = TRUE)
+          m[,currCharColumn] = gsub(m[,currCharColumn], pattern = "\n", replacement = "", useBytes = TRUE, fixed = TRUE)
         }
       }
 
@@ -331,7 +331,7 @@ for (i in i:length(dataTypes)) {
                               "LOAD DATA INFILE '",
                               currOutputFileName,
                               "' INTO TABLE NhanesRaw.",
-                              currDataType
+                              currDataType, " CHARACTER SET latin1"
       )
 
       DBI::dbExecute(cn, insertStatement)
