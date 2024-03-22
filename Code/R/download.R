@@ -304,8 +304,8 @@ for (i in i:length(dataTypes)) {
       # generate SQL table definitions from column types in tibbles
       createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("NhanesRaw", currDataType, sep="."), row.names=FALSE, m)
 
-      # change TEXT to VARCHAR(256)
-      createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
+      # # change TEXT to VARCHAR(256)
+      # createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
 
       # change DOUBLE to float
       createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
@@ -322,6 +322,28 @@ for (i in i:length(dataTypes)) {
 
       # make it a columnstore table
       createTableQuery = paste(sep="", createTableQuery, "  ENGINE=ColumnStore")
+      
+      # calculate the maximum length of strings in all of the character columns
+      maxColLengths = unlist(
+        lapply(
+          X=names(ixCharacterColumns), 
+          FUN=function(cname){
+            return(
+              max(
+                unlist(
+                  lapply(X=m[,cname], FUN=function(x){nchar(iconv(x, to="latin1"))})
+                ),
+                na.rm=TRUE
+              )
+            )
+          }
+        )
+      )
+      
+      # replace TEXT specification with VARCHAR(currColLength)
+      for (currColLength in maxColLengths) {
+        createTableQuery = sub(pattern="TEXT", replacement=paste(sep="", "VARCHAR(", max(1, currColLength), ")"), x=createTableQuery)
+      }
     
       # create the table in SQL
       DBI::dbExecute(cn, createTableQuery)
