@@ -236,6 +236,7 @@ importRawTableToDb <- function(i) {
       # along with NA in place of questionaireVariables.
       # i guess we let warnings ride...
       if (typeof(result)!="list" && (result == "error")) {
+        print(downloadErrors)
         return(list(downloadErrors, questionnaireVariables))
       }
 
@@ -382,6 +383,7 @@ importRawTableToDb <- function(i) {
     rm(m)
     gc()
     
+    DBI::dbDisconnect(cn)
     return(list(downloadErrors, questionnaireVariables))
 }
 
