@@ -236,7 +236,7 @@ importRawTableToDb <- function(i) {
       # along with NA in place of questionaireVariables.
       # i guess we let warnings ride...
       if (typeof(result)!="list" && (result == "error")) {
-        return(list(downloadErrors, NA))
+        return(list(downloadErrors, questionnaireVariables))
       }
 
       # save the survey years in the demographics table
@@ -390,11 +390,11 @@ parResultList =
   parallel::mclapply(
     FUN=importRawTableToDb, 
     X=1:length(dataTypes), 
-    mc.cores=parallel::detectCores()
+    mc.cores=parallel::detectCores()*4
   )
 
-# TODO:
-# unwind the result list to get any errors, and reconstruct the questionnaireVariables table
+questionnaireVariables = dplyr::bind_rows(lapply(X=parResultList, FUN=function(x){return(x[[2]])}))
+downloadErrors = dplyr::bind_rows(lapply(X=parResultList, FUN=function(x){return(x[[1]])}))
 
 # TODO: refactored to here
 
@@ -514,4 +514,4 @@ parResultList =
 # }
 
 # shutdown the database engine cleanly
-DBI::dbExecute(cn, "SHUTDOWN")
+#DBI::dbExecute(cn, "SHUTDOWN")
