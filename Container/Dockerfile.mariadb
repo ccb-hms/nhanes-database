@@ -4,8 +4,10 @@
 # Here is a simple example of bulding, running and interacting with the container.
 # Note that we need the --add-host option because the MariaDB services 
 # attempt to resolve the container's hostname, which fails at build time.
+# Need to increase shared memory with --shm-size because cpimport tool makes heavy 
+# use of /dev/shm
 
-# docker build --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
+# docker build --shm-size=2G --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
 
 # docker \
 #     run \
@@ -170,19 +172,19 @@ COPY Testing/Code/containerBuildTests.R /NHANES/containerBuildTests.R
 COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
 RUN chmod -R 777 /NHANES
 
-# Disable logging to stdout
-RUN sed -e '/tail/s/^/#/g' -i /usr/bin/start-services
-
 # provision the container -- this only needs to be done once, then 
 # we can just call start-services to start the whole DB stack
 RUN start-services& \
     sleep 30 \
     && provision
 
+# Disable logging to stdout
+RUN sed -e '/tail/s/^/#/g' -i /usr/bin/start-services
+
 # Run the download and database build
 RUN  start-services & \ 
     sleep 30 \
-	&& Rscript /NHANES/download.R --container-build=TRUE
+	&& Rscript /NHANES/download.R
 
 # # Clone the metadata repository and checkout the version that we want 
 # # to use for the import
