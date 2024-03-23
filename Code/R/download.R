@@ -390,7 +390,7 @@ parResultList =
   parallel::mclapply(
     FUN=importRawTableToDb, 
     X=1:length(dataTypes), 
-    mc.cores=parallel::detectCores()*4
+    mc.cores=parallel::detectCores()*2
   )
 
 questionnaireVariables = dplyr::bind_rows(lapply(X=parResultList, FUN=function(x){return(x[[2]])}))
@@ -514,4 +514,4 @@ downloadErrors = dplyr::bind_rows(lapply(X=parResultList, FUN=function(x){return
 # }
 
 # shutdown the database engine cleanly
-#DBI::dbExecute(cn, "SHUTDOWN")
+DBI::dbExecute(cn, "SHUTDOWN")
