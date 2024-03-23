@@ -180,11 +180,9 @@ RUN start-services& \
     && provision
 
 # Run the download and database build
-# TODO: fix this to start MariaDB services before calling Rscript
-# TODO: Translate T-SQL in this script to work with MariaDB.
-# RUN  start-services & \ 
-#     sleep 30 \
-# 	&& Rscript /NHANES/download.R --container-build=TRUE
+RUN  start-services & \ 
+    sleep 30 \
+	&& Rscript /NHANES/download.R --container-build=TRUE
 
 # # Clone the metadata repository and checkout the version that we want 
 # # to use for the import
