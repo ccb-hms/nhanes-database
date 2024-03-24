@@ -7,7 +7,7 @@
 # Need to increase shared memory with --shm-size because cpimport tool makes heavy 
 # use of /dev/shm
 
-# docker build --shm-size=2G --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
+# docker build --shm-size=128M --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
 
 # docker \
 #     run \
