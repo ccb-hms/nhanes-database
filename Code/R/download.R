@@ -1,43 +1,10 @@
-# pull down the NHANES data
-
-# run in container (must build nhanes-workbench first from this project's Dockerfile):
-# docker \
-#     run \
-#         --rm \
-#         --name nhanes-workbench \
-#         --platform linux/amd64 \
-#         -d \
-#         -v /tmp:/HostData \
-#         -p 8787:8787 \
-#         -p 2200:22 \
-#         -p 1433:1433 \
-#         -e 'CONTAINER_USER_USERNAME=test' \
-#         -e 'CONTAINER_USER_PASSWORD=test' \
-#         -e 'ACCEPT_EULA=Y' \
-#         -e 'SA_PASSWORD=yourStrong(!)Password' \
-#         nhanes-workbench
+# pull down the NHANES data into a local MariaDB Columnstore database
 
 # coax nhanesA to cooperate
 Sys.unsetenv("EPICONDUCTOR_CONTAINER_VERSION")
 Sys.unsetenv("EPICONDUCTOR_COLLECTION_DATE")
 
 options(timeout=100)
-optionList = list(
-  optparse::make_option(c("--container-build"), type="logical", default=FALSE, 
-                        help="is this script running inside of a container build process", metavar="logical"),
-   
-  optparse::make_option(c("--include-exclusions"), type="logical", default=FALSE, 
-                        help="whether or not to exclude the tables in Code/R/excluded_tables.tsv", metavar="logical")
-); 
-
-optParser = optparse::OptionParser(option_list=optionList);
-opt = optparse::parse_args(optParser);
-
-# this variable is used below to determine how to handle errors.
-# if running in a container build process, any errors encountered
-# in the processing of the files should cause R to return non-zero
-# status to the OS, causing the container build to fail.
-runningInContainerBuild = opt[["container-build"]]
 
 # parameters to connect to SQL
 sqlHost = "localhost"
@@ -80,8 +47,10 @@ persistTextFiles = FALSE
 
 outputDirectory = "/NHANES/Data"
 
+# get the list of NHANES files that are publicly available
 fileListTable = nhanesA::nhanesManifest("public")
 
+# read the table of excluded files
 excludedTables = read.csv("/NHANES/excluded_tables.tsv", sep='\t')
 ex <- nhanesA::nhanesManifest("limited")['Table']
 reasons <- rep("Limited Access",length(ex))
@@ -90,7 +59,7 @@ colnames(ex)[colnames(ex) == "Table"] ="TableName"
 colnames(ex)[colnames(ex) == "reasons"] ="Reason"
 excludedTables <- rbind(excludedTables, ex) 
 
-# write the table to file
+# write the table to file with modified column names
 write.table(
   excludedTables,
   file = "/NHANES/excluded_tables.tsv",
@@ -101,11 +70,13 @@ write.table(
   quote = FALSE
 )
 
-if (!opt[["include-exclusions"]]) {
-    fileListTable <- fileListTable[!grepl(paste(excludedTables$TableName, collapse = "|"), fileListTable$'Table'),]
-} else {
-    fileListTable <- fileListTable[grepl(paste(excludedTables$TableName, collapse = "|"), fileListTable$'Table'),]  
-}
+# remove the files to be excluded from the list that we will process
+fileListTable <- 
+  fileListTable[
+    !grepl(
+      paste(excludedTables$TableName, collapse = "|"), 
+      fileListTable$'Table'
+    ),]
 
 # enumerate distinct data types
 fileListTable$"Table" <- strtrim(fileListTable$"Table", 128)
@@ -121,14 +92,11 @@ names(uniqueUpper) = dataTypes[representativeStringIndex]
 dataTypes = names(uniqueUpper)
 names(dataTypes) = uniqueUpper
 
-
-if (!opt[["include-exclusions"]]){
-  # create landing zone for the raw data, set recovery mode to simple
-  DBI::dbExecute(cn, "CREATE DATABASE NhanesRaw")
-  DBI::dbExecute(cn, "CREATE DATABASE NhanesTranslated")
-  DBI::dbExecute(cn, "CREATE DATABASE NhanesMetadata")
-  DBI::dbExecute(cn, "CREATE DATABASE NhanesOntology")
-}
+# create landing zone for the raw data, set recovery mode to simple
+DBI::dbExecute(cn, "CREATE DATABASE NhanesRaw")
+DBI::dbExecute(cn, "CREATE DATABASE NhanesTranslated")
+DBI::dbExecute(cn, "CREATE DATABASE NhanesMetadata")
+DBI::dbExecute(cn, "CREATE DATABASE NhanesOntology")
 
 # create the ExcludedTables table in SQL
 DBI::dbExecute(cn, "
@@ -142,7 +110,6 @@ DBI::dbExecute(cn, "
 insertStatement = paste(sep="", "
     LOAD DATA INFILE '/NHANES/excluded_tables.tsv' INTO TABLE NhanesMetadata.ExcludedTables;
 ")
-
 DBI::dbExecute(cn, insertStatement)
 
 # shrink transaction log
@@ -157,14 +124,18 @@ questionnaireVariables = dplyr::tibble(
   TableName=character()
 )
 
-downloadErrors = dplyr::tibble(
+# track download errors
+globalDownloadErrors = dplyr::tibble(
   DataType=character(), 
   FileUrl=character(), 
   Error=character()
 )
 
-# this function is intended to be called by mclapply
-# and loads a single NHANES table into the DB
+# This function is intended to be called by mclapply
+# and loads a single NHANES table into the DB.
+# Return values is a list of lists.  The first entry contains 
+# rows to be included in globalDownloadErrors, while the second entry 
+# contains rows to be included in questionnaireVariables.
 importRawTableToDb <- function(i) {
     
     # since this will get run in a fork'd process, we need to 
@@ -176,119 +147,101 @@ importRawTableToDb <- function(i) {
           password=sqlPassword,
           host=sqlHost
         )
+    
+    # track errors that occur in this call   
+    downloadErrors = 
+      dplyr::tibble(
+        DataType=character(), 
+        FileUrl=character(), 
+        Error=character()
+      )
   
     # get the name of the data type
     currDataType = toupper(dataTypes[i])
 
-    # find all rows with URLs that should be relevant to the current data type
-    rowsForCurrDataType = which(fileListTable[,"Table"] == currDataType)
+    # find all rows (should only be one) with URLs that should be relevant to the current data type
+    currRow = which(fileListTable[,"Table"] == currDataType)
+    
+    if (length(currRow) > 1) {
+      stop("currRow = which(fileListTable[,\"Table\"] == currDataType) returned multiple values")
+    }
 
-    # assemble a list containing all of the subtables for this data type
-    dfList = list()
+    # get the URL for the SAS file pointed to by the current row
+    currFileUrl = fileListTable[currRow, "DataURL"]
 
-    # pull all of the SAS files for this data type
-    for (currRow in rowsForCurrDataType) {
+    # get the date range for this table
+    currYears = fileListTable[currRow, "Years"]
 
-      # get the URL for the SAS file pointed to by the current row
-      currFileUrl = fileListTable[currRow, "DataURL"]
+    cat("reading ", currFileUrl, " (", i, "/",  length(dataTypes), ")\n")
 
-      # get the date range for this table
-      currYears = fileListTable[currRow, "Years"]
-
-      #TODO move these to the exlusions group above^^^
-      cat("reading ", currFileUrl, " (", i, "/",  length(dataTypes), ")\n")
-
-      # attempt to download each file and log errors
-      result = "error"
-      nDownloadTries = 0
-      maxDownloadTries = 6
+    # initialize some variables to control the download loop
+    downloadedTable = "error"
+    nDownloadTries = 0
+    maxDownloadTries = 6
+    
+    # loop while trying to download the file
+    while (typeof(downloadedTable)!="list" && (nDownloadTries < maxDownloadTries)) {
       
-      while (typeof(result)!="list" && (nDownloadTries < maxDownloadTries)) {
-        
-        nDownloadTries = nDownloadTries + 1
-        
-        # attempt download
-        result = tryCatch({
-          nhanesA::nhanesFromURL(currFileUrl, translated = FALSE)
-        }, warning = function(w) {
-          downloadErrors <<- dplyr::bind_cols(
-            "DataType" = currDataType, 
-            "FileUrl" = currFileUrl,
-            "Error" = "warning"
-          )
-          return("warning")
-        }, error = function(e) {
-          downloadErrors <<- dplyr::bind_cols(
-            "DataType" = currDataType, 
-            "FileUrl" = currFileUrl,
-            "Error" = "error"
-          )
-          return("error")
-        })
-        
-        # if that failed, wait a few seconds and try again
-        if ((typeof(result)!="list") && (result == "error")) {
-          Sys.sleep(10)
-        }
-      }
+      nDownloadTries = nDownloadTries + 1
       
-      # if we failed after the above attempts, return the error
-      # along with NA in place of questionaireVariables.
-      # i guess we let warnings ride...
-      if (typeof(result)!="list" && (result == "error")) {
-        print(downloadErrors)
-        return(list(downloadErrors, questionnaireVariables))
-      }
-
-      # save the survey years in the demographics table
-      if (length(grep(pattern="DEMO", x=currDataType, fixed=TRUE)) > 0) {
-        years = dplyr::tibble("years" = rep(x=currYears, times=nrow(result)))
-        result = dplyr::bind_cols(result, years)
-      }
-
-      # save the column name / table relationships, will be returned later
-      questionnaireVariables = dplyr::bind_cols( 
-          "Variable" = toupper(colnames(result)),
-          "TableName" = rep(currDataType, times = ncol(result))
+      # attempt download
+      downloadedTable = tryCatch({
+        nhanesA::nhanesFromURL(currFileUrl, translated = FALSE)
+      }, warning = function(w) {
+        downloadErrors <<- dplyr::bind_cols(
+          "DataType" = currDataType, 
+          "FileUrl" = currFileUrl,
+          "Error" = "warning"
         )
-
-      dfList[[length(dfList) + 1]] = result
-      rm(result)
-      gc()
-
-      cat("done reading ", currFileUrl, "\n")
-    }
-
-    # fix inconsistent types in PSA age variable
-    # there are actually two versions of the age variable, 'KID221' and KIQ221
-    # not clear whether one or the other is supposed to be double / char from
-    # the NHANES documentation
-    if (currDataType == "PSA") {
-      for (j in 1:length(dfList)) {
-        if ("KID221" %in% colnames(dfList[[j]])) {
-          dfList[[j]][,"KID221"] = as.character(dfList[[j]][,"KID221"][[1]])
-        }
+        return("warning")
+      }, error = function(e) {
+        downloadErrors <<- dplyr::bind_cols(
+          "DataType" = currDataType, 
+          "FileUrl" = currFileUrl,
+          "Error" = "error"
+        )
+        return("error")
+      })
+      
+      # if that failed, wait a few seconds and try again
+      if ((typeof(downloadedTable)!="list") && (downloadedTable == "error")) {
+        Sys.sleep(10)
       }
     }
-
-    ## if we were unable to pull any files for this data type, then move on
-    if (length(dfList) == 0) {
-      next
+        
+    # if we failed after the above attempts, return an error
+    # along with an empty questionaireVariables table.
+    if (typeof(downloadedTable)!="list" && (downloadedTable == "error")) {
+      return(list(downloadErrors, questionnaireVariables))
     }
 
-    # combine the rows from all of the SAS files for this data type
-    m = dplyr::bind_rows(dfList)
-    rm(dfList)
+    # save the survey years in the demographics tables
+    if (length(grep(pattern="DEMO", x=currDataType, fixed=TRUE)) > 0) {
+      years = dplyr::tibble("years" = rep(x=currYears, times=nrow(downloadedTable)))
+      downloadedTable = dplyr::bind_cols(downloadedTable, years)
+    }
+
+    # save the column name / table relationships, will be returned later
+    questionnaireVariables = dplyr::bind_cols( 
+        "Variable" = toupper(colnames(downloadedTable)),
+        "TableName" = rep(currDataType, times = ncol(downloadedTable))
+      )
+
+    cat("done reading ", currFileUrl, "\n")
+
+    # create a tibble from the data frame
+    # m = tibble::tibble(downloadedTable)
+    # rm(downloadedTable)
     gc()
 
     # if we were able to read a table for this data type
-    if (nrow(m) > 0) {
+    if (nrow(downloadedTable) > 0) {
 
       # get a file system location to save the table
       currOutputFileName = paste(sep = "/", outputDirectory, currDataType)
 
       # get data types for each column in our current table
-      columnTypes = sapply(m, class)
+      columnTypes = sapply(downloadedTable, class)
 
       # identify columns that contain character data
       ixCharacterColumns = which(columnTypes == "character")
@@ -300,14 +253,14 @@ importRawTableToDb <- function(i) {
         for (currCharColumn in ixCharacterColumns) {
 
           # fix any embedded line endings
-          m[,currCharColumn] = gsub(m[,currCharColumn], pattern = "\r\n", replacement = "", useBytes = TRUE, fixed = TRUE)
-          m[,currCharColumn] = gsub(m[,currCharColumn], pattern = "\n", replacement = "", useBytes = TRUE, fixed = TRUE)
+          downloadedTable[,currCharColumn] = gsub(downloadedTable[,currCharColumn], pattern = "\r\n", replacement = "", useBytes = TRUE, fixed = TRUE)
+          downloadedTable[,currCharColumn] = gsub(downloadedTable[,currCharColumn], pattern = "\n", replacement = "", useBytes = TRUE, fixed = TRUE)
         }
       }
 
       # write the table to file
       write.table(
-        m,
+        downloadedTable,
         file = currOutputFileName,
         sep = "\t",
         na = "\\N",
@@ -317,10 +270,7 @@ importRawTableToDb <- function(i) {
       )
 
       # generate SQL table definitions from column types in tibbles
-      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("NhanesRaw", currDataType, sep="."), row.names=FALSE, m)
-
-      # # change TEXT to VARCHAR(256)
-      # createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
+      createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("NhanesRaw", currDataType, sep="."), row.names=FALSE, downloadedTable)
 
       # change DOUBLE to float
       createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
@@ -346,7 +296,7 @@ importRawTableToDb <- function(i) {
             return(
               max(
                 unlist(
-                  lapply(X=m[,cname], FUN=function(x){nchar(iconv(x, to="latin1"))})
+                  lapply(X=downloadedTable[,cname], FUN=function(x){nchar(iconv(x, to="latin1"))})
                 ),
                 na.rm=TRUE
               )
@@ -379,10 +329,10 @@ importRawTableToDb <- function(i) {
       }
     }
 
-    # keep memory as clean as possible
-    rm(m)
-    gc()
-    
+    # # keep memory as clean as possible
+    # rm(m)
+    # gc()
+    DBI::dbExecute(cn, "FLUSH BINARY LOGS")
     DBI::dbDisconnect(cn)
     return(list(downloadErrors, questionnaireVariables))
 }
@@ -395,125 +345,93 @@ parResultList =
     mc.cores=parallel::detectCores()*2
   )
 
-questionnaireVariables = dplyr::bind_rows(lapply(X=parResultList, FUN=function(x){return(x[[2]])}))
-downloadErrors = dplyr::bind_rows(lapply(X=parResultList, FUN=function(x){return(x[[1]])}))
+# unwind the globalDownloadErrors from the return value
+globalDownloadErrors = 
+  dplyr::bind_rows(
+    lapply(
+      X=parResultList, 
+      FUN=function(x){return(x[[1]])}
+    )
+  )
 
-# TODO: refactored to here
+# unwind the questionnaireVariables from the return value
+questionnaireVariables = 
+  dplyr::bind_rows(
+    lapply(
+      X=parResultList, 
+      FUN=function(x){return(x[[2]])}
+    )
+  )
 
+# generate CREATE TABLE statement for the questionnaireVariables
+createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "NhanesMetadata.QuestionnaireVariables", questionnaireVariables)
 
-# if (!opt[["include-exclusions"]]) {
-#       # generate CREATE TABLE statement
-#       createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), "Metadata.QuestionnaireVariables", questionnaireVariables)
+# fix TEXT column types
+createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
 
-#       # fix TEXT column types
-#       createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(256)", fixed = TRUE)
+# change DOUBLE to float
+createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
 
-#       # change DOUBLE to float
-#       createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+# remove double quotes, which interferes with the schema specification
+createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
 
-#       # remove double quotes, which interferes with the schema specification
-#       createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
+# create the table
+DBI::dbExecute(cn, createTableQuery)
 
-#       # create the table in SQL
-#       DBI::dbExecute(cn, createTableQuery)
-      
-#       # generate file name for temporary output
-#       currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
+# generate file name for temporary output
+currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
 
-#       # write questionnaireVariables table to disk
-#       write.table(
-#         questionnaireVariables,
-#         file = currOutputFileName,
-#         sep = "\t",
-#         na = "",
-#         append=TRUE,
-#         row.names = FALSE,
-#         col.names = FALSE,
-#         quote = FALSE
-#       )
-#         # issue BULK INSERT
-#       insertStatement = paste(sep="",
-#                               "BULK INSERT ",
-#                               "Metadata.QuestionnaireVariables",
-#                               " FROM '",
-#                               currOutputFileName,
-#                               "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-#       )
-#       DBI::dbExecute(cn, insertStatement)
+# write questionnaireVariables table to disk
+write.table(
+  questionnaireVariables,
+  file = currOutputFileName,
+  sep = "\t",
+  na = "",
+  append=TRUE,
+  row.names = FALSE,
+  col.names = FALSE,
+  quote = FALSE
+)
 
-# } else {
-#       # generate file name for temporary output
-#       currOutputFileName = paste(sep = "/", outputDirectory, "QuestionnaireVariables.txt")
+insertStatement = 
+  paste(sep="",
+    "LOAD DATA INFILE '",
+    currOutputFileName,
+    "' INTO TABLE NhanesMetadata.QuestionnaireVariables CHARACTER SET latin1"
+  )
+                              
+DBI::dbExecute(cn, insertStatement)
 
-#       # write questionnaireVariables table to disk
-#       write.table(
-#         questionnaireVariables,
-#         file = currOutputFileName,
-#         sep = "\t",
-#         na = "",
-#         append=TRUE,
-#         row.names = FALSE,
-#         col.names = FALSE,
-#         quote = FALSE
-#       )
-#         # issue BULK INSERT
-#       insertStatement = paste(sep="",
-#                               "BULK INSERT ",
-#                               "Metadata.QuestionnaireVariables",
-#                               " FROM '",
-#                               currOutputFileName,
-#                               "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-#       )
-#       DBI::dbExecute(cn, insertStatement)
-# }
+# create a table to hold records of the failed file downloads
+DBI::dbExecute(cn, "CREATE TABLE NhanesMetadata.DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")
 
-# # shrink transaction log
-# DBI::dbExecute(cn, "FLUSH BINARY LOGS")
+# generate file name for temporary output
+currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
 
-# if (!opt[["include-exclusions"]]) {
-# # create a table to hold records of the failed file downloads
-# DBI::dbExecute(cn, "CREATE TABLE Metadata.DownloadErrors (DataType varchar(1024), FileUrl varchar(1024), Error varchar(256))")}
+# write failed file downloads table to disk
+write.table(
+  globalDownloadErrors,
+  file = currOutputFileName,
+  sep = "\t",
+  na = "",
+  append=TRUE,
+  row.names = FALSE,
+  col.names = FALSE,
+  quote = FALSE
+)
 
-# # generate file name for temporary output
-# currOutputFileName = paste(sep = "/", outputDirectory, "DownloadErrors.txt")
+# issue BULK INSERT
+insertStatement = 
+  paste(sep="",
+    "LOAD DATA INFILE '",
+    currOutputFileName,
+    "' INTO TABLE NhanesMetadata.DownloadErrors CHARACTER SET latin1"
+  )
 
-# # write failed file downloads table to disk
-# write.table(
-#   downloadErrors,
-#   file = currOutputFileName,
-#   sep = "\t",
-#   na = "",
-#   append=TRUE,
-#   row.names = FALSE,
-#   col.names = FALSE,
-#   quote = FALSE
-# )
+DBI::dbExecute(cn, insertStatement)
 
-# # issue BULK INSERT
-# insertStatement = paste(sep="",
-#                         "BULK INSERT ",
-#                         "Metadata.DownloadErrors",
-#                         " FROM '",
-#                         currOutputFileName,
-#                         "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=1, FIELDTERMINATOR='\t')"
-# )
-
-# DBI::dbExecute(cn, insertStatement)
-
-# # shrink transaction log
-# DBI::dbExecute(cn, "FLUSH BINARY LOGS")
-
-# # shrink tempdb
-# DBI::dbExecute(cn, "USE tempdb")
-
-# tempFiles = DBI::dbGetQuery(cn, "
-#                         SELECT name FROM TempDB.sys.sysfiles
-#                         ")
-
-# for (i in 1:nrow(tempFiles)) {    
-#     currTempFileName = tempFiles[i,1]
-#     DBI::dbExecute(cn, paste("DBCC SHRINKFILE(",currTempFileName,", 8)", sep=''))
-# }
+# shrink transaction log
+DBI::dbExecute(cn, "FLUSH BINARY LOGS")
 
 # shutdown the database engine cleanly
 DBI::dbExecute(cn, "SHUTDOWN")
