@@ -176,17 +176,17 @@ RUN sed -e '/tail/s/^/#/g' -i /usr/bin/start-services
 # Run the download and database build
 COPY Code/R/download.R /NHANES/download.R
 COPY Code/R/excluded_tables.tsv /NHANES/excluded_tables.tsv
-# RUN  start-services & \ 
-#     sleep 30 \
-# 	&& Rscript /NHANES/download.R
+RUN  start-services & \ 
+    sleep 30 \
+	&& Rscript /NHANES/download.R
 
 # # Clone the metadata repository and checkout the version that we want 
 # # to use for the import
-# WORKDIR /NHANES
-# RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
-# WORKDIR /NHANES/NHANES-metadata
-# RUN git fetch --tags
-# RUN git checkout tags/v3.10.0
+WORKDIR /NHANES
+RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
+WORKDIR /NHANES/NHANES-metadata
+RUN git fetch --tags
+RUN git checkout tags/v3.10.0
 
 # # Import the metadata
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
