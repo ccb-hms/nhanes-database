@@ -1,7 +1,7 @@
 # experiment with getting a functional interactive environment with R installed in 
 # a standard mariadb columnstore container
 
-# Here is a simple example of bulding, running and interacting with the container.
+# Here is an example of bulding, running and interacting with the container.
 # Note that we need the --add-host option because the MariaDB services 
 # attempt to resolve the container's hostname, which fails at build time.
 # Need to increase shared memory with --shm-size because cpimport tool makes heavy 
@@ -16,7 +16,7 @@
 #         -p 2200:22 \
 #         -p 3306:3306 \
 #         -p 1433:1433 \
-#         --shm-size=512m \
+#         --shm-size=128m \
 #         -e PM1=mcs1 \
 #         --hostname=mcs1 \
 #         --name mcs1 \
