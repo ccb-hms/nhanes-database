@@ -188,6 +188,18 @@ DBI::dbExecute(cn, "UPDATE NhanesMetadata.QuestionnaireVariables SET Description
 DBI::dbExecute(cn, "DROP TABLE NhanesMetadata.tmp_nhanes_variables")
 DBI::dbExecute(cn, "DROP TABLE NhanesMetadata.QuestionnaireVariables_old")
 
+## Temporarily stop here:
+
+# shrink transaction log
+DBI::dbExecute(cn, "FLUSH BINARY LOGS")
+
+# shutdown the database engine cleanly
+DBI::dbExecute(cn, "SHUTDOWN")
+
+q("no")
+
+
+
 # TODO: debugged to here
 
 #--------------------------------------------------------------------------------------------------------
