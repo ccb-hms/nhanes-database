@@ -11,7 +11,7 @@ for (i in 1:60) {
           drv=RMariaDB::MariaDB(),
           username=sqlUserName,
           password=sqlPassword,
-#          load_data_local_infile = TRUE, 
+          load_data_local_infile = TRUE, 
           host=sqlHost
         )
         , warning = function(e) {
@@ -56,7 +56,7 @@ for (i in seq_len(length(tableList))) {
                         qv = "NhanesMetadata.QuestionnaireVariables",
                         vc = "NhanesMetadata.VariableCodebook",
                         cleanse_numeric = TRUE)
-    cat(sprintf(":\t %d x %d\n", nrow(translatedTable), ncol(translatedTable)))
+    cat(sprintf(":\t %d x %d ", nrow(translatedTable), ncol(translatedTable)))
     
     ## Eventually, for bulk insert:
     ## ## Write to file and do all the fancy mariaDB column store stuff
@@ -78,20 +78,27 @@ for (i in seq_len(length(tableList))) {
     ## ...
 
     ## for quick and dirty testing --- no primary key, not null etc
-    destTableName = paste0("NhanesTranslated.", currRawTableName)
+##    destTableName = paste0("NhanesTranslated.", currRawTableName)
+
+    DBI::dbGetQuery(cn, "USE NhanesTranslated")
+    destTableName = currRawTableName # in default database?
     ##cat("Trying to insert table ", destTableName, "\n")
 
     res = 
         try(
         {
             fieldTypes = RMariaDB::dbDataType(cn, translatedTable)
-            print(table(fieldTypes))
-            ## RMariaDB::dbWriteTable(cn, destTableName,
-            ##                        translatedTable,
-            ##                        field.types = fieldTypes,
-            ##                        row.names = FALSE)
+            typeFreq = table(fieldTypes)
+            cat("[",
+                paste(names(typeFreq), " = ", typeFreq,
+                      collapse = ", "),
+                "]\n")
+            DBI::dbWriteTable(cn, destTableName,
+                              translatedTable,
+                              field.types = fieldTypes,
+                              row.names = FALSE,
             ## ## gives 'no database selected' error when trying to insert          
-            ##                     # safe = FALSE)
+                              safe = FALSE)
         }, silent = TRUE)
 
     if (inherits(res, "try-error"))
