@@ -1,25 +1,25 @@
 # parameters to connect to SQL
 sqlHost = "localhost"
-sqlUserName = "sa"
-sqlPassword = "yourStrong(!)Password"
-sqlDefaultDb = "NhanesLandingZone"
+sqlUserName = "admin"
+sqlPassword = "C0lumnStore!"
 
-# loop waiting for SQL Server database to become available
+# loop waiting for SQL database to become available
 for (i in 1:60) {
     cn = tryCatch(
         # connect to SQL
-        MsSqlTools::connectMsSqlSqlLogin(
-            server = sqlHost, 
-            user = sqlUserName, 
-            password = sqlPassword, 
-            database = sqlDefaultDb
-        ), warning = function(e) {
+        RMariaDB::dbConnect(
+          drv=RMariaDB::MariaDB(),
+          username=sqlUserName,
+          password=sqlPassword,
+          load_data_local_infile = TRUE, 
+          host=sqlHost
+        )
+        , warning = function(e) {
             return(NA)
         }, error = function(e) {
             return(NA)
         }
     )
-    
     suppressWarnings({
          if (is.na(cn)) {
             Sys.sleep(10)
@@ -27,42 +27,90 @@ for (i in 1:60) {
             break
         }
     })
-   
 }
 
 suppressWarnings({
     if (is.na(cn)) {
-        stop("could not connect to SQL Server")
+        stop("could not connect to SQL database")
     }
 })
 
-tableList = DBI::dbGetQuery(cn, "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'Raw' GROUP BY TABLE_NAME ORDER BY TABLE_NAME")
 
-for (i in 1:nrow(tableList)) {
+source("/NHANES/translate-table.R")
+
+tableList = DBI::dbGetQuery(cn, "SHOW TABLES FROM NhanesRaw")[[1]]
+
+## check that we have all info
+tableList = sort(tableList)
+
+str(tableList)
+
+for (i in seq_len(length(tableList))) {
     
-    currRawTableName = tableList[i,1]
-    print(paste("Translating ", currRawTableName, sep=""))
-    stmt = paste0("EXEC spTranslateTable 'Raw', ", currRawTableName, ", 'Translated', ", currRawTableName)
-    SqlTools::dbSendUpdate(cn, stmt)
+    currRawTableName = tableList[i]
+    cat("Translating ", currRawTableName)
+
+    translatedTable =
+        translate_table(name = currRawTableName, con = cn,
+                        x = paste0("NhanesRaw.", currRawTableName),
+                        qv = "NhanesMetadata.QuestionnaireVariables",
+                        vc = "NhanesMetadata.VariableCodebook",
+                        cleanse_numeric = TRUE)
+    cat(sprintf(":\t %d x %d ", nrow(translatedTable), ncol(translatedTable)))
+    
+    ## Eventually, for bulk insert:
+    ## ## Write to file and do all the fancy mariaDB column store stuff
+    ##
+    ## outputDirectory = "/NHANES/Data"
+    ## ## FIXME: may overwite if persistTextFiles = TRUE
+    ## currOutputFileName = paste(sep = "/", outputDirectory, currRawTableName)
+    ##
+    ## write.table(
+    ##     translatedTable,
+    ##     file = currOutputFileName,
+    ##     sep = "\t",
+    ##     na = "\\N",
+    ##     row.names = FALSE,
+    ##     col.names = FALSE,
+    ##     quote = FALSE
+    ##   )
+    ## 
+    ## ...
+
+    ## for quick and dirty testing --- no primary key, not null etc
+##    destTableName = paste0("NhanesTranslated.", currRawTableName)
+
+    DBI::dbGetQuery(cn, "USE NhanesTranslated")
+    destTableName = currRawTableName # in default database?
+    ##cat("Trying to insert table ", destTableName, "\n")
+
+    res = 
+        try(
+        {
+            fieldTypes = RMariaDB::dbDataType(cn, translatedTable)
+            typeFreq = table(fieldTypes)
+            cat("[",
+                paste(names(typeFreq), " = ", typeFreq,
+                      collapse = ", "),
+                "]\n")
+            DBI::dbWriteTable(cn, destTableName,
+                              translatedTable,
+                              field.types = fieldTypes,
+                              row.names = FALSE,
+            ## ## gives 'no database selected' error when trying to insert          
+                              safe = FALSE)
+        }, silent = TRUE)
+
+    if (inherits(res, "try-error"))
+        cat("Error: ", conditionMessage(attr(res, "condition")),
+            "\n")
+    ## else cat("Success!\n")
 }
 
 # shrink transaction log
-SqlTools::dbSendUpdate(cn, "DBCC SHRINKFILE(NhanesLandingZone_log)")
-
-# issue checkpoint
-SqlTools::dbSendUpdate(cn, "CHECKPOINT")
-
-# shrink tempdb
-SqlTools::dbSendUpdate(cn, "USE tempdb")
-
-tempFiles = DBI::dbGetQuery(cn, "
-                        SELECT name FROM TempDB.sys.sysfiles
-                        ")
-
-for (i in 1:nrow(tempFiles)) {    
-    currTempFileName = tempFiles[i,1]
-    SqlTools::dbSendUpdate(cn, paste("DBCC SHRINKFILE(",currTempFileName,", 8)", sep=''))
-}
+DBI::dbExecute(cn, "FLUSH BINARY LOGS")
 
 # shutdown the database engine cleanly
-SqlTools::dbSendUpdate(cn, "SHUTDOWN")
+DBI::dbExecute(cn, "SHUTDOWN")
+
+
