@@ -1,4 +1,4 @@
-# experiment with getting a functional interactive environment with R installed in 
+# Create a functional interactive environment with R installed in 
 # a standard mariadb columnstore container
 
 # Here is an example of bulding, running and interacting with the container.
@@ -7,7 +7,7 @@
 # Need to increase shared memory with --shm-size because cpimport tool makes heavy 
 # use of /dev/shm
 
-# docker build --shm-size=512M --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
+# docker build --shm-size=512M --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile .
 
 # docker \
 #     run \
