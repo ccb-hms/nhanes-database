@@ -7,7 +7,7 @@
 # Need to increase shared memory with --shm-size because cpimport tool makes heavy 
 # use of /dev/shm
 
-# docker build --shm-size=256M --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
+# docker build --shm-size=512M --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile.mariadb .
 
 # docker \
 #     run \
@@ -140,7 +140,8 @@ RUN \
     && Rscript -e "remotes::install_cran('optparse')" \
     && Rscript -e "remotes::install_cran('glue')" \
     && Rscript -e "remotes::install_cran('stringr')" \
-    && Rscript -e "remotes::install_cran('odbc')"
+    && Rscript -e "remotes::install_cran('odbc')" \
+    && Rscript -e "remotes::install_cran('readr')"
     
 # Allow modification of these locations so users can install R packages without warnings
 RUN chmod -R 777 $R_HOME/library
@@ -190,17 +191,12 @@ RUN git checkout tags/v3.10.0
 
 # # Import the metadata
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
-# # TODO: Fix this to start MariaDB services before calling Rscript.
-# # TODO: Translate T-SQL in this script to work with MariaDB.
 RUN start-services & sleep 30 \
     && Rscript /NHANES/etlVariableCodebook.R
 
 # # Translate the coded responses
 COPY Code/R/translate-table.R /NHANES/translate-table.R
 COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
-# # TODO: Fix this to start MariaDB services before calling Rscript
-# # TODO: Fix this script to use the nhanesA functionality to translate the tables, write them to disk and import.
-# #       Translate T-SQL in this script to work with MariaDB.
 WORKDIR /tmp
 RUN start-services & sleep 30 \
     && Rscript /NHANES/translateRawTables.R
