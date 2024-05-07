@@ -52,12 +52,18 @@ fileListTable = nhanesA::nhanesManifest("public")
 
 # read the table of excluded files
 excludedTables = read.csv("/NHANES/excluded_tables.tsv", sep='\t')
-ex <- nhanesA::nhanesManifest("limited")['Table']
-reasons <- rep("Limited Access",length(ex))
-ex <- cbind(ex, reasons)
-colnames(ex)[colnames(ex) == "Table"] ="TableName"
-colnames(ex)[colnames(ex) == "reasons"] ="Reason"
-excludedTables <- rbind(excludedTables, ex) 
+
+# TODO: this call to nhanesA::nhanesManifest is throwing an error
+# Deepayan says to not pull the limited access table, since everything in 
+# "public" is available, but we need to agree on the semantics of what 
+# goes into NhanesMetadata.ExcludedTables
+
+# ex <- nhanesA::nhanesManifest("limited")['Table']
+# reasons <- rep("Limited Access",length(ex))
+# ex <- cbind(ex, reasons)
+# colnames(ex)[colnames(ex) == "Table"] ="TableName"
+# colnames(ex)[colnames(ex) == "reasons"] ="Reason"
+# excludedTables <- rbind(excludedTables, ex) 
 
 # write the table to file with modified column names
 write.table(
