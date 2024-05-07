@@ -378,7 +378,7 @@ createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VAR
 # change DOUBLE to float
 createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
 
-# remove double quotes, which interferes with the schema specification
+# remove double quotes
 createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
 
 # create the table
