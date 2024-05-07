@@ -188,20 +188,6 @@ DBI::dbExecute(cn, "UPDATE NhanesMetadata.QuestionnaireVariables SET Description
 DBI::dbExecute(cn, "DROP TABLE NhanesMetadata.tmp_nhanes_variables")
 DBI::dbExecute(cn, "DROP TABLE NhanesMetadata.QuestionnaireVariables_old")
 
-## Temporarily stop here:
-
-# shrink transaction log
-DBI::dbExecute(cn, "FLUSH BINARY LOGS")
-
-# shutdown the database engine cleanly
-DBI::dbExecute(cn, "SHUTDOWN")
-
-q("no")
-
-
-
-# TODO: debugged to here
-
 #--------------------------------------------------------------------------------------------------------
 # Add Ontology Tables
 #--------------------------------------------------------------------------------------------------------
@@ -209,49 +195,46 @@ ontology_tables <- list.files(ontologyTables)
 
 for (currTable in ontology_tables) {
     if (currTable != "README.md") {
-    path = ontologyTables
-    loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
-    
-    sqlTableName = gsub(str_extract(currTable, '.*(?=\\.tsv)'), pattern = 'ontology_', replace = "", fixed = TRUE)
-    
-    # generate SQL table definitions from column types in tibbles
-    createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste(sep=".", "Ontology", sqlTableName), loaded_data) # nolint
+        path = ontologyTables
+        loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
+        
+        sqlTableName = gsub(str_extract(currTable, '.*(?=\\.tsv)'), pattern = 'ontology_', replace = "", fixed = TRUE)
+        
+        # generate SQL table definitions from column types in tibbles
+        createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste(sep=".", "NhanesOntology", sqlTableName), row.names=FALSE, loaded_data) # nolint
 
-    # change TEXT to VARCHAR(1024)
-    createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(MAX)", fixed = TRUE) # nolint # nolint
+        # change TEXT to VARCHAR(2048)
+        createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(2048)", fixed = TRUE) # nolint # nolint
 
-    # change DOUBLE to float
-    createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+        # change DOUBLE to float
+        createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
 
-    # remove double quotes, which interferes with the schema specification
-    createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
+        # remove double quotes
+        createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
 
-    print(createTableQuery)
-    # create the table in SQL
-    DBI::dbExecute(cn, createTableQuery)
-    print("no problem creating")
-    
-    # run bulk insert
-    insertStatement = paste(sep="",
-                            "BULK INSERT Ontology.",
-                            sqlTableName,
-                            " FROM '",
-                            paste0(path, currTable),
-                            "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
-    )
-    DBI::dbExecute(cn, insertStatement)
-    print("no problem inserting")
-    
-  # keep memory as clean as possible
-  rm(loaded_data)
-  gc()
- }
+        # make it a columnstore table
+        createTableQuery = paste(sep="", createTableQuery, "  ENGINE=ColumnStore")
+
+        # create the table in SQL
+        DBI::dbExecute(cn, createTableQuery)
+        
+        # run bulk insert
+        insertStatement = 
+            paste(sep="",
+                "LOAD DATA INFILE '",
+                paste0(path, currTable),
+                "' INTO TABLE NhanesOntology.", 
+                sqlTableName,
+                " FIELDS OPTIONALLY ENCLOSED BY '\"' IGNORE 1 ROWS;"
+            )
+
+        DBI::dbExecute(cn, insertStatement)
+        
+        # keep memory as clean as possible
+        rm(loaded_data)
+        gc()
+    }
 }
-
-# shrink transaction log
-DBI::dbExecute(cn, "DBCC SHRINKFILE(Nhaneslog)")
-# issue checkpoint
-DBI::dbExecute(cn, "CHECKPOINT")
 
 # --------------------------------------------------------------------------------------------------------
 # Add Ontology Mappings
@@ -261,55 +244,63 @@ ontology_mappings <- list.files(ontologyMappings)
 for (currTable in ontology_mappings) {
     
     if (currTable != "README.md" & currTable != "non-mappings") {
+
         path = ontologyMappings
+                
         loaded_data <- read.csv(file = paste0(path, currTable), sep = "\t")
         
         colnames(loaded_data)[which(colnames(loaded_data) == "Table")] <- "TableName"
 
         # generate SQL table definitions from column types in tibbles
-        createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("Ontology", str_extract(currTable, '.*(?=\\.tsv)'), sep="."), loaded_data) # nolint
+        createTableQuery = DBI::sqlCreateTable(DBI::ANSI(), paste("NhanesOntology", str_extract(currTable, '.*(?=\\.tsv)'), sep="."), row.names=FALSE, loaded_data) # nolint
 
-        # change TEXT to VARCHAR(512)
-        createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(512)", fixed = TRUE) # nolint # nolint
+        # change TEXT to VARCHAR(2048)
+        createTableQuery = gsub(createTableQuery, pattern = "\" TEXT", replace = "\" VARCHAR(2048)", fixed = TRUE) # nolint # nolint
 
-        # change DOUBLE to VARCHAR(512)
-        createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" VARCHAR(512)", fixed = TRUE)
+        # change DOUBLE to float
+        createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
         
-        # change SMALLINT to VARCHAR(512)
+        # change SMALLINT to int
         createTableQuery = gsub(createTableQuery, pattern = "SMALLINT", replace = "VARCHAR(512)", fixed = TRUE)
-        
-        # remove double quotes, which interferes with the schema specification
+
+        # remove double quotes
         createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
+
+        # make it a columnstore table
+        createTableQuery = paste(sep="", createTableQuery, "  ENGINE=ColumnStore")
         
         # create the table in SQL
         DBI::dbExecute(cn, createTableQuery)
 
-        # run bulk insert
+        # one or more versions of this file are missing a newline before EOF
         if (currTable == "nhanes_oral_health_mappings.tsv") {
-            insertStatement = paste(sep="",
-                                "BULK INSERT Ontology.",
-                                str_extract(currTable, '.*(?=\\.tsv)'),
-                                " FROM '",
-                                paste0(path, currTable),
-                                "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\r\n')"
-        )
-        }
-        else{
-            insertStatement = paste(sep="",
-                                "BULK INSERT Ontology.",
-                                str_extract(currTable, '.*(?=\\.tsv)'),
-                                " FROM '",
-                                paste0(path, currTable),
-                                "' WITH (KEEPNULLS, TABLOCK, ROWS_PER_BATCH=2000, FIRSTROW=2, FIELDTERMINATOR = '\t', ROWTERMINATOR = '\n')"
-        ) 
+            
+            # read the whole file into memory
+            chars = readr::read_file(file = paste0(path, currTable))
+            
+            # if it's missing a trailing newline
+            if (substr(chars, nchar(chars), nchar(chars)) != "\n") {
+                
+                # append one
+                cat("\r\n", file = paste0(path, currTable), append=TRUE)
+            }
         }
         
+        # run bulk insert
+        insertStatement = 
+            paste(sep="",
+                "LOAD DATA INFILE '",
+                paste0(path, currTable),
+                "' INTO TABLE NhanesOntology.", 
+                str_extract(currTable, '.*(?=\\.tsv)'),
+                " FIELDS OPTIONALLY ENCLOSED BY '\"' IGNORE 1 ROWS;"
+            )
         DBI::dbExecute(cn, insertStatement)
 
-    # keep memory as clean as possible
-    rm(loaded_data)
-    gc()
- }
+        # keep memory as clean as possible
+        rm(loaded_data)
+        gc()
+    }
 }
 
 # shrink transaction log
