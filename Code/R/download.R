@@ -119,7 +119,7 @@ insertStatement = paste(sep="", "
 DBI::dbExecute(cn, insertStatement)
 
 # shrink transaction log
-DBI::dbExecute(cn, "FLUSH BINARY LOGS")
+DBI::dbExecute(cn, "PURGE BINARY LOGS BEFORE NOW")
 
 # prevent scientific notation
 options(scipen = 15)
@@ -338,7 +338,7 @@ importRawTableToDb <- function(i) {
     # # keep memory as clean as possible
     # rm(m)
     # gc()
-    DBI::dbExecute(cn, "FLUSH BINARY LOGS")
+    DBI::dbExecute(cn, "PURGE BINARY LOGS BEFORE NOW")
     DBI::dbDisconnect(cn)
     return(list(downloadErrors, questionnaireVariables))
 }
@@ -437,7 +437,7 @@ insertStatement =
 DBI::dbExecute(cn, insertStatement)
 
 # shrink transaction log
-DBI::dbExecute(cn, "FLUSH BINARY LOGS")
+DBI::dbExecute(cn, "PURGE BINARY LOGS BEFORE NOW")
 
 # shutdown the database engine cleanly
 DBI::dbExecute(cn, "SHUTDOWN")

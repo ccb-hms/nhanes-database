@@ -196,6 +196,7 @@ RUN git checkout tags/v3.10.0
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
 RUN start-services & sleep 30 \
     && Rscript /NHANES/etlVariableCodebook.R
+RUN rm -rf /NHANES/NHANES-metadata
 
 # Translate the coded responses
 COPY Code/R/translate-table.R /NHANES/translate-table.R
@@ -228,7 +229,7 @@ RUN chmod 700 /startup/startup.sh
 # Run tests
 #------------------------------------------------------------------------------
 
-COPY Testing/Code/containerBuildTests.R /NHANES/containerBuildTests.R
+# COPY Testing/Code/containerBuildTests.R /NHANES/containerBuildTests.R
 # # TODO: fix this to start MariaDB services before calling Rscript
 # # TODO: Translate T-SQL in this script to work with MariaDB
 # RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
