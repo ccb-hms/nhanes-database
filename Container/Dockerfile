@@ -174,13 +174,16 @@ RUN mkdir /NHANES/Data
 # Disable MariaDB logging to stdout
 RUN sed -e '/tail/s/^/#/g' -i /usr/bin/start-services
 
+# Save the data collection date
+RUN (date +'%Y-%m-%d') > /EPICONDUCTOR_COLLECTION_DATE.txt
+
 # Run the download and database build
 COPY Code/R/download.R /NHANES/download.R
 COPY Code/R/excluded_tables.tsv /NHANES/excluded_tables.tsv
 RUN  start-services & \ 
     sleep 30 \
 	&& Rscript /NHANES/download.R
-
+    
 # # Clone the metadata repository and checkout the version that we want 
 # # to use for the import
 WORKDIR /NHANES
@@ -208,13 +211,8 @@ RUN start-services & sleep 30 \
 
 # Declare which version of the container this is, and make it available inside the container 
 ENV EPICONDUCTOR_CONTAINER_VERSION v1.0.0-alpha
-ENV EPICONDUCTOR_COLLECTION_DATE 2024-03-20
-
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> $R_HOME/etc/Renviron.site
-RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> $R_HOME/etc/Renviron.site
-
 RUN echo "export EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/profile.d/EPICONDUCTOR_CONTAINER_VERSION.sh
-RUN echo "export EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/profile.d/EPICONDUCTOR_COLLECTION_DATE.sh
 
 # Copy container startup script
 RUN mkdir /startup

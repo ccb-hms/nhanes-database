@@ -1,5 +1,9 @@
 #!/bin/bash
 
+EPICONDUCTOR_COLLECTION_DATE=$(cat /EPICONDUCTOR_COLLECTION_DATE.txt)
+echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> $R_HOME/etc/Renviron.site
+echo "export EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/profile.d/EPICONDUCTOR_COLLECTION_DATE.sh
+
 # if username and password were not provided, exit.
 # otherwise, create the user, add to groups, and modify file system permissions
 if [[ -z $CONTAINER_USER_USERNAME ]] || [[ -z $CONTAINER_USER_PASSWORD ]];
