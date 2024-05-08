@@ -184,35 +184,40 @@ RUN  start-services & \
     sleep 30 \
 	&& Rscript /NHANES/download.R
     
-# # Clone the metadata repository and checkout the version that we want 
-# # to use for the import
+# Clone the metadata repository and checkout the version that we want 
+# to use for the import
 WORKDIR /NHANES
 RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
 WORKDIR /NHANES/NHANES-metadata
 RUN git fetch --tags
 RUN git checkout tags/v3.10.0
 
-# # Import the metadata
+# Import the metadata
 COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
 RUN start-services & sleep 30 \
     && Rscript /NHANES/etlVariableCodebook.R
 
-# # Translate the coded responses
+# Translate the coded responses
 COPY Code/R/translate-table.R /NHANES/translate-table.R
 COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
 WORKDIR /tmp
 RUN start-services & sleep 30 \
     && Rscript /NHANES/translateRawTables.R
 
-
 #------------------------------------------------------------------------------
 # Final Odds and Ends
 #------------------------------------------------------------------------------
 
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION v1.0.0-alpha
+ENV EPICONDUCTOR_CONTAINER_VERSION v0.5.0
 RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> $R_HOME/etc/Renviron.site
 RUN echo "export EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/profile.d/EPICONDUCTOR_CONTAINER_VERSION.sh
+RUN echo $EPICONDUCTOR_CONTAINER_VERSION > /EPICONDUCTOR_CONTAINER_VERSION.txt
+
+# Load the versioning information into the database
+COPY Code/R/loadVersionInfoToDB.R /NHANES/loadVersionInfoToDB.R
+RUN start-services & sleep 30 \
+    && Rscript /NHANES/loadVersionInfoToDB.R
 
 # Copy container startup script
 RUN mkdir /startup
