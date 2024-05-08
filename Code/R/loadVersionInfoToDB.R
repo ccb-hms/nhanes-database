@@ -21,6 +21,7 @@ for (i in 1:60) {
     )
     suppressWarnings({
          if (is.na(cn)) {
+            print("Waiting for database...")
             Sys.sleep(10)
         } else {
             break
@@ -66,7 +67,8 @@ DBI::dbExecute(cn,
 
 
 # shrink transaction log
-DBI::dbExecute(cn, "PURGE BINARY LOGS BEFORE NOW")
+DBI::dbExecute(cn, "FLUSH BINARY LOGS")
+DBI::dbExecute(cn, "PURGE BINARY LOGS BEFORE DATE_ADD(NOW(), INTERVAL 1 DAY)")
 
 # shutdown the database engine cleanly
 DBI::dbExecute(cn, "SHUTDOWN")

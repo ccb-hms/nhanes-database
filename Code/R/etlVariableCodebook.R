@@ -304,7 +304,8 @@ for (currTable in ontology_mappings) {
 }
 
 # shrink transaction log
-DBI::dbExecute(cn, "PURGE BINARY LOGS BEFORE NOW")
+DBI::dbExecute(cn, "FLUSH BINARY LOGS")
+DBI::dbExecute(cn, "PURGE BINARY LOGS BEFORE DATE_ADD(NOW(), INTERVAL 1 DAY)")
 
 # shutdown the database engine cleanly
 DBI::dbExecute(cn, "SHUTDOWN")

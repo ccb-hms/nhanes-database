@@ -215,7 +215,7 @@ RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> $R_
 RUN echo "export EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/profile.d/EPICONDUCTOR_CONTAINER_VERSION.sh
 RUN echo $EPICONDUCTOR_CONTAINER_VERSION > /EPICONDUCTOR_CONTAINER_VERSION.txt
 
-# Load the versioning information into the database
+# # Load the versioning information into the database
 COPY Code/R/loadVersionInfoToDB.R /NHANES/loadVersionInfoToDB.R
 RUN start-services & sleep 30 \
     && Rscript /NHANES/loadVersionInfoToDB.R
