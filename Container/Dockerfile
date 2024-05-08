@@ -114,7 +114,7 @@ RUN dnf makecache && \
 #------------------------------------------------------------------------------
 
 # declare R version and install it
-ENV R_VERSION=4.3.3
+ENV R_VERSION=4.4.0
 RUN dnf -y install R-${R_VERSION}
     
 ENV R_HOME=/usr/lib64/R
