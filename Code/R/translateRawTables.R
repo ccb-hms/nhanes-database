@@ -35,7 +35,6 @@ suppressWarnings({
     }
 })
 
-
 source("/NHANES/translate-table.R")
 
 tableList = DBI::dbGetQuery(cn, "SHOW TABLES FROM NhanesRaw")[[1]]
@@ -43,69 +42,145 @@ tableList = DBI::dbGetQuery(cn, "SHOW TABLES FROM NhanesRaw")[[1]]
 ## check that we have all info
 tableList = sort(tableList)
 
-str(tableList)
-
-for (i in seq_len(length(tableList))) {
+insertTranslatedTableToDB <- function(i) {
     
-    currRawTableName = tableList[i]
-    cat("Translating ", currRawTableName)
+    # since this will get run in a fork'd process, we need to 
+    # establish a new connection object, can't share the one
+    # from the parent process
+    cn = RMariaDB::dbConnect(
+            drv=RMariaDB::MariaDB(),
+            username=sqlUserName,
+            password=sqlPassword,
+            host=sqlHost
+        )
 
+    
+    # get the name of the current table to be translated
+    currRawTableName = tableList[i]
+    cat("Translating ", currRawTableName, " (", i, "/", length(tableList), ")", "\n")
+
+    # translate the table
     translatedTable =
         translate_table(name = currRawTableName, con = cn,
                         x = paste0("NhanesRaw.", currRawTableName),
                         qv = "NhanesMetadata.QuestionnaireVariables",
                         vc = "NhanesMetadata.VariableCodebook",
                         cleanse_numeric = TRUE)
-    cat(sprintf(":\t %d x %d ", nrow(translatedTable), ncol(translatedTable)))
+        
+    outputDirectory = "/NHANES/Data"
+    currOutputFileName = paste(sep = "/", outputDirectory, currRawTableName)
     
-    ## Eventually, for bulk insert:
-    ## ## Write to file and do all the fancy mariaDB column store stuff
-    ##
-    ## outputDirectory = "/NHANES/Data"
-    ## ## FIXME: may overwite if persistTextFiles = TRUE
-    ## currOutputFileName = paste(sep = "/", outputDirectory, currRawTableName)
-    ##
-    ## write.table(
-    ##     translatedTable,
-    ##     file = currOutputFileName,
-    ##     sep = "\t",
-    ##     na = "\\N",
-    ##     row.names = FALSE,
-    ##     col.names = FALSE,
-    ##     quote = FALSE
-    ##   )
-    ## 
-    ## ...
+    write.table(
+        translatedTable,
+        file = currOutputFileName,
+        sep = "\t",
+        na = "\\N",
+        row.names = FALSE,
+        col.names = FALSE,
+        quote = FALSE
+    )
+    
+    # set database context
+    DBI::dbExecute(cn, "USE NhanesTranslated")
 
-    ## for quick and dirty testing --- no primary key, not null etc
-##    destTableName = paste0("NhanesTranslated.", currRawTableName)
+    # generate SQL table definition from the R table
+    createTableQuery = 
+        DBI::sqlCreateTable(
+            DBI::ANSI(), 
+            paste("`NhanesTranslated`.`", currRawTableName, "`", sep=""), 
+            row.names=FALSE, 
+            translatedTable
+        )
 
-    DBI::dbGetQuery(cn, "USE NhanesTranslated")
-    destTableName = currRawTableName # in default database?
-    ##cat("Trying to insert table ", destTableName, "\n")
+    # change DOUBLE to float
+    createTableQuery = gsub(createTableQuery, pattern = "\" DOUBLE", replace = "\" float", fixed = TRUE)
+
+    # remove double quotes
+    createTableQuery = gsub(createTableQuery, pattern = '"', replace = "", fixed = TRUE)
+
+    # make it a columnstore table
+    createTableQuery = paste(sep="", createTableQuery, "  ENGINE=ColumnStore")
+    
+    # get data types for each column in our current table
+    columnTypes = sapply(translatedTable, class)
+
+    # identify columns that contain character data
+    ixCharacterColumns = which(columnTypes == "character")
+
+    # calculate the maximum length of strings in all of the character columns
+    maxColLengths = 
+        unlist(
+            lapply(
+                X = names(ixCharacterColumns), 
+                FUN = function(cname) {
+                    return(
+                        max(
+                            unlist(
+                                lapply(
+                                    X = translatedTable[,cname], 
+                                    FUN = function(x) {
+                                        nchar(x)
+                                    }
+                                )
+                            ),
+                            na.rm=TRUE
+                        )
+                    )
+                }
+            )
+        )
+    
+    # why +4?
+    # there is a problem loading WHQMEC_E, column WHQ510P at row 34
+    if (currRawTableName == "WHQMEC_E") {
+        maxColLengths = maxColLengths + 4
+    }
+    
+    # replace TEXT specification with VARCHAR(currColLength)
+    for (currColLength in maxColLengths) {
+        createTableQuery = sub(pattern="TEXT", replacement=paste(sep="", "VARCHAR(", max(1, currColLength), ")"), x=createTableQuery)
+    }
+    
+    # create the table in SQL
+    DBI::dbExecute(cn, paste0("DROP TABLE IF EXISTS `NhanesTranslated`.`", currRawTableName, "`;"))
+    DBI::dbExecute(cn, createTableQuery)
+    
+    # run bulk insert
+    insertStatement = 
+        paste(
+            sep="",
+            "LOAD DATA INFILE '",
+            currOutputFileName,
+            "' INTO TABLE NhanesTranslated.",
+            currRawTableName, " CHARACTER SET latin1"
+        )
 
     res = 
-        try(
-        {
-            fieldTypes = RMariaDB::dbDataType(cn, translatedTable)
-            typeFreq = table(fieldTypes)
-            cat("[",
-                paste(names(typeFreq), " = ", typeFreq,
-                      collapse = ", "),
-                "]\n")
-            DBI::dbWriteTable(cn, destTableName,
-                              translatedTable,
-                              field.types = fieldTypes,
-                              row.names = FALSE,
-            ## ## gives 'no database selected' error when trying to insert          
-                              safe = FALSE)
-        }, silent = TRUE)
-
+        try({
+            DBI::dbExecute(cn, insertStatement)
+        })
+    
     if (inherits(res, "try-error"))
-        cat("Error: ", conditionMessage(attr(res, "condition")),
-            "\n")
-    ## else cat("Success!\n")
+        cat(
+            "Error: ", 
+            conditionMessage(attr(res, "condition")),
+            "\n"
+        )
+
+    # delete intermediate text file to save disk space
+    file.remove(currOutputFileName)
+    
+    # disconnect from the database server
+    DBI::dbDisconnect(cn)
 }
+
+# translate tables in parallel using all available cores
+parResultList = 
+    parallel::mclapply(
+        FUN=insertTranslatedTableToDB, 
+        X=1:length(tableList),
+        mc.cores=parallel::detectCores()
+    )
 
 # shrink transaction log
 DBI::dbExecute(cn, "FLUSH BINARY LOGS")
