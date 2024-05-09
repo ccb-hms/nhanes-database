@@ -1,369 +1,243 @@
-#
-# Container image for CCB's NHANES database project
-# Author: Nathan Palmer
-# Copyright: Harvard Medical School
-#
-#
-# docker build --progress plain --tag nhanes-workbench -f Container/Dockerfile .
+# Create a functional interactive environment with R installed in 
+# a standard mariadb columnstore container
+
+# Here is an example of bulding, running and interacting with the container.
+# Note that we need the --add-host option because the MariaDB services 
+# attempt to resolve the container's hostname, which fails at build time.
+# Need to increase shared memory with --shm-size because cpimport tool makes heavy 
+# use of /dev/shm
+
+# docker build --shm-size=512M --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile .
+
 # docker \
 #     run \
-#         --rm \
-#         --name nhanes-workbench \
 #         -d \
-#         -v LOCAL_DIRECTORY:/HostData \
-#         -p 8787:8787 \
+#         --rm \
 #         -p 2200:22 \
-#         -p 1433:1433 \
+#         -p 3306:3306 \
+#         --shm-size=256M \
+#         -e PM1=mcs1 \
+#         --hostname=mcs1 \
+#         --name mcs1 \
 #         -e 'CONTAINER_USER_USERNAME=test' \
 #         -e 'CONTAINER_USER_PASSWORD=test' \
-#         -e 'ACCEPT_EULA=Y' \
-#         -e 'SA_PASSWORD=yourStrong(!)Password' \
-#         nhanes-workbench
+#         mariadb-test
 
-FROM rocker/binder:4.3.2
+# ssh test@127.0.0.1 -p 2200 -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=/dev/null
 
-#------------------------------------------------------------------------------
-# Basic initial system configuration
-#------------------------------------------------------------------------------
+# this just extends the MariaDB container, so the default credntials should work: admin:C0lumnStore!
+# to log in to the database
 
-USER root
+# mariadb -h 127.0.0.1 -P 3306 -u admin -p'C0lumnStore!'
 
-# install standard Ubuntu Server packages
-RUN yes | unminimize
+# CREATE DATABASE analytics;
 
-# we're going to create a non-root user at runtime and give the user sudo
-RUN apt-get update && \
-	apt-get -y install sudo \
-	&& echo "Set disable_coredump false" >> /etc/sudo.conf
-	
-# set locale info
-RUN echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
-	&& apt-get update && apt-get install -y locales \
-	&& locale-gen en_US.utf8 \
-	&& /usr/sbin/update-locale LANG=en_US.UTF-8
-ENV LC_ALL en_US.UTF-8
-ENV LANG en_US.UTF-8
-ENV TZ=America/New_York
+# this throws an error if `provision` has not already been run
+# CREATE TABLE analytics.appointments(
+#     id BIGINT UNSIGNED NOT NULL,
+#     name VARCHAR(200) NOT NULL,
+#     phone_number VARCHAR(15) NOT NULL,
+#     email VARCHAR(254) NOT NULL,
+#     time DATETIME NOT NULL,
+#     reason VARCHAR(15) NOT NULL,
+#     status VARCHAR(10) NOT NULL,
+#     doctor_id BIGINT UNSIGNED NOT NULL
+# ) ENGINE=ColumnStore;
 
-WORKDIR /tmp
 
-#------------------------------------------------------------------------------
-# Install system tools and libraries via apt
-#------------------------------------------------------------------------------
+# CREATE TABLE analytics.T1(
+#     id BIGINT UNSIGNED NOT NULL
+# ) ENGINE=ColumnStore;
 
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-	&& apt-get install \
-		-y \
-		ca-certificates \
-		curl \
-		less \
-		libgomp1 \
-		libpango-1.0-0 \
-		libxt6 \
-		libsm6 \
-		make \
-		texinfo \
-		libtiff-dev \
-		libpng-dev \
-		libicu-dev \
-		libpcre3 \
-		libpcre3-dev \
-		libbz2-dev \
-		liblzma-dev \
-		gcc \
-		g++ \
-		openjdk-8-jre \
-		openjdk-8-jdk \
-		gfortran \
-		libreadline-dev \
-		libx11-dev \
-		libcurl4-openssl-dev \ 
-		libssl-dev \
-		libxml2-dev \
-		wget \
-		libtinfo5 \
-		openssh-server \
-		ssh \
-		xterm \
-		xauth \
-		screen \
-		tmux \
-		git \
-		libgit2-dev \
-		nano \
-		emacs \
-		vim \
-		man-db \
-		zsh \
-		unixodbc \
-		unixodbc-dev \
-		gnupg \
-		krb5-user \
-		python3-dev \
-		python3 \ 
-		python3-pip \
-		alien \
-		libaio1 \
-		pkg-config \ 
-		libkrb5-dev \
-		unzip \
-		cifs-utils \
-		lsof \
-		libnlopt-dev \
-		libopenblas-openmp-dev \
-		libpcre2-dev \
-		systemd \
-		libcairo2-dev \
-		libharfbuzz-dev \
-		libfribidi-dev \
-		cmake \
-		qpdf \
-	&& rm -rf /var/lib/apt/lists/*
+# INSERT INTO analytics.T1 VALUES (123);
+# INSERT INTO analytics.T1 VALUES (456);
+# INSERT INTO analytics.T1 VALUES (780);
+
+# SELECT * FROM analytics.T1;
+
+# and from R (after running the above):
+# cn = RMariaDB::dbConnect(RMariaDB::MariaDB(), dbname="analytics", username="admin", password="C0lumnStore!", host="localhost")
+# DBI::dbGetQuery(cn, "SELECT * FROM analytics.T1")
+
+# example of starting the DB engine and waiting for it to become available to execute SQL
+# the call to start-services goes in the background, provision waits on the services to 
+# become available, then exits and passes control to the next statement
+# RUN start-services& \
+#     provision \
+#     && echo "show databases; CREATE DATABASE NHANES; show databases; CREATE TABLE NHANES.TestTable (id int) ENGINE=ColumnStore; INSERT INTO NHANES.TestTable VALUES (123); SELECT * FROM NHANES.TestTable;" | mariadb -h 127.0.0.1 -P 3306 -u admin
+
+
+FROM mariadb/columnstore
 
 #------------------------------------------------------------------------------
-# Configure system tools
+# Configure the system
 #------------------------------------------------------------------------------
 
-# required for ssh and sshd	
-RUN mkdir /var/run/sshd	
+# Install and configure sshd
+RUN dnf -y install openssh-server openssh-clients; \
+    sed -i 's/^\(UsePAM yes\)/# \1/' /etc/ssh/sshd_config; \
+    ssh-keygen -q -t rsa -b 2048 -f /etc/ssh/ssh_host_rsa_key -N '' && \
+    ssh-keygen -q -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key -N '' && \
+    ssh-keygen -t dsa -f /etc/ssh/ssh_host_ed25519_key  -N ''; \
+    dnf clean all;
+EXPOSE 22
 
-# enable password authedtication over SSH
-RUN sed -i 's!^#PasswordAuthentication yes!PasswordAuthentication yes!' /etc/ssh/sshd_config
+# Enable powertools
+RUN dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+    dnf config-manager --set-enabled powertools
 
-# configure X11
-RUN sed -i "s/^.*X11Forwarding.*$/X11Forwarding yes/" /etc/ssh/sshd_config \
-    && sed -i "s/^.*X11UseLocalhost.*$/X11UseLocalhost no/" /etc/ssh/sshd_config \
-    && grep "^X11UseLocalhost" /etc/ssh/sshd_config || echo "X11UseLocalhost no" >> /etc/ssh/sshd_config	
+# Install unixODBC
+RUN dnf makecache && \
+    dnf -y install \ 
+        unixODBC-devel  \
+        mariadb-connector-odbc
 
-# tell git to use the cache credential helper and set a 1 day-expiration
-RUN git config --system credential.helper 'cache --timeout 86400'
+# Install additional libraries to support the R environment
+RUN dnf makecache && \
+    dnf -y install \ 
+        openssl-devel  \
+        libxml2-devel  \
+        libcurl-devel  \
+        harfbuzz-devel \
+        fribidi-devel \
+        freetype-devel \
+        libpng-devel \
+        libtiff-devel \
+        libjpeg-devel \
+        libgit2-devel \
+        mysql-devel \
+        git
 
-#------------------------------------------------------------------------------
-# Install SQL Server
-#------------------------------------------------------------------------------
-RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
-RUN curl -fsSL https://packages.microsoft.com/config/ubuntu/22.04/mssql-server-preview.list | sudo tee /etc/apt/sources.list.d/mssql-server-preview.list
-RUN apt-get update
-RUN apt-get install -y mssql-server
-RUN mkdir -p -m 770 /var/opt/mssql && chgrp -R 0 /var/opt/mssql
-
-#------------------------------------------------------------------------------
-# Install and configure database connectivity components
-#------------------------------------------------------------------------------
-	
-# # install FreeTDS driver
-# WORKDIR /tmp
-# RUN wget ftp://ftp.freetds.org/pub/freetds/stable/freetds-1.1.40.tar.gz
-# RUN tar zxvf freetds-1.1.40.tar.gz
-# RUN cd freetds-1.1.40 && ./configure --enable-krb5 && make && make install
-# RUN rm -r /tmp/freetds*
-
-# # tell unixodbc where to find the FreeTDS driver shared object
-# RUN echo '\n\
-# [FreeTDS]\n\
-# Driver = /usr/local/lib/libtdsodbc.so \n\
-# ' >> /etc/odbcinst.ini
-
-# install pyodbc
-RUN pip3 install pyodbc
 
 #------------------------------------------------------------------------------
-# Install basic R packages
+# Install R and packages
 #------------------------------------------------------------------------------
 
-# use the remotes package to manage installations
+# declare R version and install it
+ENV R_VERSION=4.4.0
+RUN dnf -y install R-${R_VERSION}
+    
+ENV R_HOME=/usr/lib64/R
+RUN echo "export R_HOME=$R_HOME" >> /etc/profile.d/R_HOME.sh
+
+# Enable multithreaded build for R packages
+RUN echo 'options(Ncpus = max(c(parallel::detectCores()-1, 1)))' >> $R_HOME/etc/Rprofile.site
+
+# Set CRAN repository snapshot for standard package installs
+ENV R_REPOSITORY=https://packagemanager.posit.co/cran/__linux__/centos8/2024-03-20
+RUN echo "options(repos = c(CRAN = \"$R_REPOSITORY\"))" >> $R_HOME/etc/Rprofile.site
+
+# Use the remotes package to manage installations
 RUN Rscript -e "install.packages('remotes')"
 
-# configure and install rJava
-RUN R CMD javareconf
-RUN Rscript -e "remotes::install_cran('rJava', type='source')"
-
-# install devtools
-RUN Rscript -e "remotes::install_cran('devtools')"
-
-#----------------------------------------------------------------------------------------------------
-# install standard data science and bioinformatics packages
-RUN Rscript -e "remotes::install_cran('Rcpp')"
-RUN Rscript -e "remotes::install_cran('roxygen2')"
-RUN Rscript -e "remotes::install_cran('tidyverse')"
-RUN Rscript -e "remotes::install_cran('git2r')"
-RUN Rscript -e "remotes::install_cran('getPass')"
-RUN Rscript -e "remotes::install_cran('xlsx')"
-RUN Rscript -e "remotes::install_cran('data.table')"
-RUN Rscript -e "remotes::install_cran('dplyr')"
-RUN Rscript -e "remotes::install_cran('forestplot')"
-RUN Rscript -e "remotes::install_cran('splines')"
-RUN Rscript -e "remotes::install_cran('tidyr')"
-RUN Rscript -e "remotes::install_cran('stringr')"
-RUN Rscript -e "remotes::install_cran('survival')"
-RUN Rscript -e "remotes::install_cran('codetools')"
-RUN Rscript -e "remotes::install_cran('glmnet')"
-RUN Rscript -e "remotes::install_cran('glmpath')"
-RUN Rscript -e "remotes::install_cran('testthat')"
-RUN Rscript -e "remotes::install_cran('DBI')"
-RUN Rscript -e "remotes::install_cran('odbc')"
-RUN Rscript -e "remotes::install_cran('readr')"
-RUN Rscript -e "remotes::install_cran('kableExtra')"
-RUN Rscript -e "remotes::install_cran('plotROC')"
-RUN Rscript -e "remotes::install_cran('sjPlot')"
-RUN Rscript -e "remotes::install_cran('survey')"
-RUN Rscript -e "remotes::install_cran('mitools')"
-RUN Rscript -e "remotes::install_cran('tinytex')"
-RUN Rscript -e "remotes::install_cran('bookdown')"
-RUN Rscript -e "remotes::install_cran('reshape')"
-RUN Rscript -e "remotes::install_cran('lme4')"
-RUN Rscript -e "remotes::install_cran('survminer')"
-RUN Rscript -e "remotes::install_cran('rvest')"
-
-# # -- vanilla because there is a bug that causes the R intro / preamble text to get pushed into the compiler
-# RUN Rscript --vanilla -e "remotes::install_cran('lme4', repos='"$R_REPOSITORY"')"
-# RUN Rscript --vanilla -e "remotes::install_cran('survminer', repos='"$R_REPOSITORY"')"
-
-# install R packages for connecting to SQL Server and working with resulting data sets
-RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/FactToCube.git', ref='v1.0.0')"
-RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/MsSqlTools.git', ref='v1.0.0')"
-RUN Rscript -e "devtools::install_github('https://github.com/nathan-palmer/SqlTools.git', ref='v1.0.0')"
-
-# additional packages for NHANES analyses
-RUN Rscript -e "remotes::install_cran('broom')"
-RUN Rscript -e "remotes::install_cran('Hmisc')"
-RUN Rscript -e "remotes::install_cran('nonnest2')"
-RUN Rscript -e "remotes::install_cran('reshape2')"
-RUN Rscript -e "remotes::install_cran('jsonlite')"
-RUN Rscript -e "remotes::install_cran('viridis')"
-RUN Rscript -e "remotes::install_cran('optparse')"
-
-# # need old version of rvest in order for the hack that parses URLs to work in the NHANES download script
-# RUN Rscript -e "remove.packages('rvest')"
-# RUN Rscript -e "remotes::install_cran('rvest', repos='https://packagemanager.posit.co/cran/__linux__/focal/2021-01-29')"
-
-#install nhanesA and phonto from github in order to have the latest version (CRAN will take a while to update)
-RUN Rscript -e "devtools::install_github('ccb-hms/phonto')"
-RUN Rscript -e "devtools::install_github('cjendres1/nhanes@97f1850')"
+# Install packages required for ETL process
+RUN \
+    Rscript -e "remotes::install_cran('dplyr')" \
+    && Rscript -e "remotes::install_cran('devtools')" \
+    && Rscript -e "devtools::install_github('cjendres1/nhanes@97f1850')" \
+    && Rscript -e "remotes::install_cran('DBI')" \
+    && Rscript -e "remotes::install_cran('RMariaDB')" \
+    && Rscript -e "remotes::install_cran('optparse')" \
+    && Rscript -e "remotes::install_cran('glue')" \
+    && Rscript -e "remotes::install_cran('stringr')" \
+    && Rscript -e "remotes::install_cran('odbc')" \
+    && Rscript -e "remotes::install_cran('readr')"
+    
+# Allow modification of these locations so users can install R packages without warnings
+RUN chmod -R 777 $R_HOME/library
+RUN chmod -R 777 /usr/share/doc/R/html/packages.html
 
 #------------------------------------------------------------------------------
-# Download and DB Build Process
+# Build the database
 #------------------------------------------------------------------------------
 
-# Copy startup script
-RUN mkdir /startup
-COPY Container/startup.sh /startup/startup.sh
-RUN chmod 700 /startup/startup.sh
+# Disable GRANTs (anyone can log in to MariaDB without password) -- required to run the 
+# DB engine at build time
+RUN printf "[mysqld]\nskip-grant-tables\n" >> /etc/my.cnf
 
-# Create a mount point for host filesystem data
-RUN mkdir /HostData
+# Tell the DB engine to use cpimport for bulk import operations, see:
+# https://mariadb.com/docs/server/ref/mdb/system-variables/columnstore_use_import_for_batchinsert/
+RUN printf "columnstore_use_import_for_batchinsert=ALWAYS" >> /etc/my.cnf
 
-# Copy the download and demo scripts
+# provision the container -- this only needs to be done once, then 
+# we can just call start-services to start the whole DB stack
+RUN start-services& \
+    sleep 30 \
+    && provision
+
+# This is the base scratch work directory
 RUN mkdir /NHANES
+
+# This is where the ETL process will write intermediate results
+RUN mkdir /NHANES/Data
+
+# Disable MariaDB logging to stdout
+RUN sed -e '/tail/s/^/#/g' -i /usr/bin/start-services
+
+# Save the data collection date
+RUN (date +'%Y-%m-%d') > /EPICONDUCTOR_COLLECTION_DATE.txt
+
+# Run the download and database build
 COPY Code/R/download.R /NHANES/download.R
 COPY Code/R/excluded_tables.tsv /NHANES/excluded_tables.tsv
-COPY Code/R/regressionExample.R /NHANES/regressionExample.R
-RUN chmod -R 777 /NHANES
-
-RUN mkdir /NHANES/Data
-RUN chmod -R 777 /NHANES/Data
-
-ARG ACCEPT_EULA=Y
-ARG SA_PASSWORD=yourStrong(!)Password
-
-# copy the container build tests
-COPY Testing/Code/containerBuildTests.R /NHANES/containerBuildTests.R
-
-RUN curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
-RUN curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
-
-RUN apt-get update && \
-	ACCEPT_EULA=Y apt-get install -y msodbcsql17
-
-# optional: for bcp and sqlcmd
-RUN ACCEPT_EULA=Y apt-get install -y mssql-tools
-
-RUN echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
-
-# run the download and database build
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \ 
-	&& Rscript /NHANES/download.R --container-build=TRUE
-
-# run the ETL process to load variable metadata
-COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
-WORKDIR /tmp
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-	&& apt-get install \
-		-y \
-		python3.9 \
-		python3-pip
-
+RUN  start-services & \ 
+    sleep 30 \
+	&& Rscript /NHANES/download.R
+    
+# Clone the metadata repository and checkout the version that we want 
+# to use for the import
+WORKDIR /NHANES
 RUN git clone https://github.com/ccb-hms/NHANES-metadata.git
-WORKDIR /tmp/NHANES-metadata
-
+WORKDIR /NHANES/NHANES-metadata
 RUN git fetch --tags
 RUN git checkout tags/v3.10.0
 
-# install packages, which require newer version of rvest in conflict with the download / build script
-RUN Rscript -e "remotes::install_version('DT', repos='https://packagemanager.posit.co/cran/__linux__/focal/2022-11-04', upgrade=TRUE, version='0.26')"
+# Import the metadata
+COPY Code/R/etlVariableCodebook.R /NHANES/etlVariableCodebook.R
+RUN start-services & sleep 30 \
+    && Rscript /NHANES/etlVariableCodebook.R
+RUN rm -rf /NHANES/NHANES-metadata
 
-# ------------------------------------------------------------------------------
-# Optional: NHANES-metadata Creation Process 
-# ------------------------------------------------------------------------------
-
-# RUN python3.9 -m pip install pydantic==1.7
-# RUN python3.9 -m pip install pandas==2.0.2
-# RUN python3.9 -m pip install Owlready2==0.40
-# RUN python3.9 -m pip install text2term==2.3.2
-
-# WORKDIR /tmp/NHANES-metadata/code
-
-# RUN Rscript get_nhanes_metadata.R
-
-# RUN python3.9 generate_ontology_tables.py
-# RUN python3.9 generate_ontology_mappings.py
-# RUN python3.9 generate_nhanes_mapping_report.py
-# ------------------------------------------------------------------------------
-
-# ------------------------------------------------------------------------------
-# ETL Variable Codebooks, Translate Tables
-# ------------------------------------------------------------------------------
-
-WORKDIR /tmp/NHANES-metadata
-
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-	&& Rscript /NHANES/etlVariableCodebook.R
-
-# translate the coded responses
-COPY Code/Sql/spTranslateTable.sql /NHANES/spTranslateTable.sql
-COPY Code/R/stageSprocs.R /NHANES/stageSprocs.R
-WORKDIR /NHANES
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-	&& Rscript /NHANES/stageSprocs.R
-
-# run the script to translate the raw coded tables
+# Translate the coded responses
+COPY Code/R/translate-table.R /NHANES/translate-table.R
 COPY Code/R/translateRawTables.R /NHANES/translateRawTables.R
-WORKDIR /NHANES
-
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-	&& Rscript /NHANES/translateRawTables.R
+WORKDIR /tmp
+RUN start-services & sleep 30 \
+    && Rscript /NHANES/translateRawTables.R
 
 #------------------------------------------------------------------------------
 # Final Odds and Ends
 #------------------------------------------------------------------------------
 
-# allow modification of these locations so users can install R packages without warnings
-RUN chmod -R 777 /usr/local/lib/R/library
-RUN chmod -R 777 /usr/local/lib/R/doc/html/packages.html
-
 # Declare which version of the container this is, and make it available inside the container 
-ENV EPICONDUCTOR_CONTAINER_VERSION v0.4.1
-ENV EPICONDUCTOR_COLLECTION_DATE 2024-02-12
+ENV EPICONDUCTOR_CONTAINER_VERSION v0.5.0
+RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> $R_HOME/etc/Renviron.site
+RUN echo "export EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/profile.d/EPICONDUCTOR_CONTAINER_VERSION.sh
+RUN echo $EPICONDUCTOR_CONTAINER_VERSION > /EPICONDUCTOR_CONTAINER_VERSION.txt
 
-RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /usr/local/lib/R/etc/Renviron.site
-RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /usr/local/lib/R/etc/Renviron.site
+# # Load the versioning information into the database
+COPY Code/R/loadVersionInfoToDB.R /NHANES/loadVersionInfoToDB.R
+RUN start-services & sleep 30 \
+    && Rscript /NHANES/loadVersionInfoToDB.R
 
-RUN echo "EPICONDUCTOR_CONTAINER_VERSION=$EPICONDUCTOR_CONTAINER_VERSION" >> /etc/environment
-RUN echo "EPICONDUCTOR_COLLECTION_DATE=$EPICONDUCTOR_COLLECTION_DATE" >> /etc/environment
+# Copy container startup script
+RUN mkdir /startup
+COPY Container/startup.sh /startup/startup.sh
+RUN chmod 700 /startup/startup.sh
 
-RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
-	&& Rscript /NHANES/containerBuildTests.R
+#------------------------------------------------------------------------------
+# Run tests
+#------------------------------------------------------------------------------
 
-CMD ["/startup/startup.sh"]
+# COPY Testing/Code/containerBuildTests.R /NHANES/containerBuildTests.R
+# # TODO: fix this to start MariaDB services before calling Rscript
+# # TODO: Translate T-SQL in this script to work with MariaDB
+# RUN runuser -m -p  mssql -c '/opt/mssql/bin/sqlservr &' \
+# 	&& Rscript /NHANES/containerBuildTests.R
+
+# TODO: possibly re-enable GRANTs
+
+# make the scratch directory world read / write
+RUN chmod -R 777 /NHANES
+
+ENTRYPOINT ["/startup/startup.sh"]
