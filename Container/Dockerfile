@@ -9,6 +9,12 @@
 
 # docker build --shm-size=512M --add-host mcs1:127.0.0.1 --progress plain --tag mariadb-test -f Container/Dockerfile .
 
+# buildx multiarch build (no-cache for debugging):
+# docker context create intel-context --docker host=ssh://nathanpalmer@np-mbp-intel-16.local
+# docker buildx create --use --name ArmAndX64Builder desktop-linux --platform linux/arm64
+# docker buildx create --append --name ArmAndX64Builder --platform linux/amd64 intel-context
+# docker buildx build --no-cache --platform linux/amd64,linux/arm64 --add-host mcs1:127.0.0.1 --shm-size=512M --progress plain --tag mariadb-test -f Container/Dockerfile --push --tag "hmsccb/nhanes-workbench:version-0.5.0-multiarch-test" .
+
 # docker \
 #     run \
 #         -d \
@@ -65,7 +71,6 @@
 # RUN start-services& \
 #     provision \
 #     && echo "show databases; CREATE DATABASE NHANES; show databases; CREATE TABLE NHANES.TestTable (id int) ENGINE=ColumnStore; INSERT INTO NHANES.TestTable VALUES (123); SELECT * FROM NHANES.TestTable;" | mariadb -h 127.0.0.1 -P 3306 -u admin
-
 
 FROM mariadb/columnstore
 
