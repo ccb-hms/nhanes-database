@@ -11,6 +11,37 @@ sqlHost = "localhost"
 sqlUserName = "admin"
 sqlPassword = "C0lumnStore!"
 
+
+
+## The upstream data source is the CDC website, but eventually we wish
+## to move the ETL process to use a pre-downloaded and version-tagged
+## GitHub repo. The following function allows us to switch between
+## these two options.
+
+## NOTE: Use of nhanesA should be unnecessary if we switch, except for nhanesManifest()
+
+downloadFromCDC <- FALSE
+RAWDATASRC <- "https://raw.githubusercontent.com/ccb-hms/nhanes-data/main/Data/"
+
+downloadNhanesRaw <- function(url) {
+    if (downloadFromCDC)
+        nhanesA::nhanesFromURL(url, translated = FALSE)
+    else {
+        nhtable <- gsub(".XPT", "", toupper(basename(url)), fixed = TRUE)
+        TEMPDATA <- tempfile(fileext = ".csv.xz") # new file to avoid race conditions with mclapply()
+        datafile <- paste0(RAWDATASRC, nhtable, ".csv.xz")
+        if (download.file(datafile, destfile = TEMPDATA, quiet = TRUE) != 0) {
+            cat("\n***   Failed to download ", datafile, " *** \n")
+            stop("Error downloading ", url)
+        }
+        on.exit(unlink(TEMPDATA))
+        read.csv(xzfile(TEMPDATA))
+    }
+}
+
+
+
+
 # loop waiting for SQL database to become available
 for (i in 1:60) {
     cn = tryCatch(
@@ -184,12 +215,17 @@ importRawTableToDb <- function(i) {
     
     # loop while trying to download the file
     while (typeof(downloadedTable)!="list" && (nDownloadTries < maxDownloadTries)) {
-      
+
+        if (nDownloadTries > 0) { # diagnostic message
+            cat("** ", currFileUrl, "                ** Attempt: ", nDownloadTries + 1, "\n")
+            print(downloadedTable)
+            print(downloadErrors)
+        }
         nDownloadTries = nDownloadTries + 1
         
         # attempt download
         downloadedTable = tryCatch({
-            nhanesA::nhanesFromURL(currFileUrl, translated = FALSE)
+            downloadNhanesRaw(currFileUrl)
         }, warning = function(w) {
             downloadErrors <<- dplyr::bind_cols(
             "DataType" = currDataType, 
@@ -218,6 +254,7 @@ importRawTableToDb <- function(i) {
         return(list(downloadErrors, questionnaireVariables))
     }
 
+    ## FIXME: Omit this step? Unnecessary, and makes result incompatible with non-DB nhanesA
     # save the survey years in the demographics tables
     if (length(grep(pattern="DEMO", x=currDataType, fixed=TRUE)) > 0) {
         years = dplyr::tibble("years" = rep(x=currYears, times=nrow(downloadedTable)))
@@ -312,7 +349,7 @@ importRawTableToDb <- function(i) {
         for (currColLength in maxColLengths) {
             createTableQuery = sub(pattern="TEXT", replacement=paste(sep="", "VARCHAR(", max(1, currColLength), ")"), x=createTableQuery)
         }
-        
+
         # create the table in SQL
         DBI::dbExecute(cn, createTableQuery)
         
@@ -335,7 +372,7 @@ importRawTableToDb <- function(i) {
     }
 
     DBI::dbDisconnect(cn)
-    return(list(downloadErrors, questionnaireVariables))
+    return(list(downloadErrors, questionnaireVariables, i = i, url = currFileUrl))
 }
 
 # import in parallel using all available cores
@@ -345,6 +382,15 @@ parResultList =
         X=1:length(dataTypes), 
         mc.cores=parallel::detectCores()*2
     )
+
+status_ok = vapply(parResultList, is.list, TRUE)
+if (any(!status_ok)) {
+    cat("NOTE: Unexpected (non-list) components in 'parResultList', for URLs:\n")
+    cat(paste0("NOTE: \t", fileListTable$DataURL[!status_ok]), sep = "\n")
+    str(parResultList[!status_ok])
+    cat("NOTE: Expect problems\n")
+}
+
 
 # unwind the globalDownloadErrors from the return value
 globalDownloadErrors = 
