@@ -80,7 +80,6 @@ outputDirectory = "/NHANES/Data"
 
 # get the list of NHANES files that are publicly available
 fileListTable = nhanesA::nhanesManifest("public")
-fileListTable = fileListTable[1:200, ]
 
 # read the table of excluded files
 excludedTables = read.csv("/NHANES/excluded_tables.tsv", sep='\t')
